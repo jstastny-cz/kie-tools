@@ -276,8 +276,8 @@ export function NewWorkspaceFromUrlPage() {
 
       // git but not gist or snippet
       else if (
-        importableUrl.type === UrlType.GITHUB_DOT_COM ||
-        importableUrl.type === UrlType.BITBUCKET_DOT_ORG ||
+        importableUrl.type === UrlType.GITHUB ||
+        importableUrl.type === UrlType.BITBUCKET ||
         importableUrl.type === UrlType.GIT
       ) {
         if (gitServerRefsPromise.data?.defaultBranch) {
@@ -298,7 +298,7 @@ export function NewWorkspaceFromUrlPage() {
       }
 
       // gist
-      else if (importableUrl.type === UrlType.GIST_DOT_GITHUB_DOT_COM) {
+      else if (importableUrl.type === UrlType.GITHUB_GIST) {
         importableUrl.url.hash = "";
 
         if (gitServerRefsPromise.data?.defaultBranch) {
@@ -319,7 +319,7 @@ export function NewWorkspaceFromUrlPage() {
       }
 
       // snippet
-      else if (importableUrl.type === UrlType.BITBUCKET_DOT_ORG_SNIPPET) {
+      else if (importableUrl.type === UrlType.BITBUCKET_SNIPPET) {
         importableUrl.url.hash = "";
         if (gitServerRefsPromise.data?.defaultBranch) {
           await cloneGitRepository({

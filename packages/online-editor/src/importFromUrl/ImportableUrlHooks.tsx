@@ -26,7 +26,7 @@ import * as React from "react";
 import { useCallback, useMemo } from "react";
 import { matchPath } from "react-router";
 import { AuthProviderIcon } from "../authProviders/AuthProviderIcon";
-import { useAuthProvider } from "../authProviders/AuthProvidersContext";
+import { useAuthProvider, useAuthProviders } from "../authProviders/AuthProvidersContext";
 import { AuthSession, AUTH_SESSION_NONE } from "../authSessions/AuthSessionApi";
 import { AuthInfo } from "../authSessions/AuthSessionsContext";
 import { useEditorEnvelopeLocator } from "../envelopeLocator/hooks/EditorEnvelopeLocatorContext";
@@ -36,20 +36,27 @@ import { PromiseStateStatus, useLivePromiseState } from "@kie-tools-core/react-h
 import { useWorkspaces } from "@kie-tools-core/workspaces-git-fs/dist/context/WorkspacesContext";
 import { GitServerRef } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/GitServerRef";
 import { GitRefTypeIcon } from "../gitRefs/GitRefTypeIcon";
+import {
+  AuthProvider,
+  AuthProviderType,
+  GitAuthDomainKind,
+  GitAuthProvider,
+  GitAuthProviderType,
+} from "../authProviders/AuthProvidersApi";
 
 export enum UrlType {
   //git
   GIT,
-  GITHUB_DOT_COM,
-  GIST_DOT_GITHUB_DOT_COM,
-  BITBUCKET_DOT_ORG,
-  BITBUCKET_DOT_ORG_SNIPPET,
+  GITHUB,
+  GITHUB_GIST,
+  BITBUCKET,
+  BITBUCKET_SNIPPET,
 
   //single file
-  GIST_DOT_GITHUB_DOT_COM_FILE,
-  GITHUB_DOT_COM_FILE,
-  BITBUCKET_DOT_ORG_FILE,
-  BITBUCKET_DOT_ORG_SNIPPET_FILE,
+  GITHUB_GIST_FILE,
+  GITHUB_FILE,
+  BITBUCKET_FILE,
+  BITBUCKET_SNIPPET_FILE,
   FILE,
 
   //other
@@ -61,10 +68,10 @@ export enum UrlType {
 export function isCertainlyGit(urlType: UrlType) {
   return (
     urlType === UrlType.GIT ||
-    urlType === UrlType.GITHUB_DOT_COM ||
-    urlType === UrlType.GIST_DOT_GITHUB_DOT_COM ||
-    urlType === UrlType.BITBUCKET_DOT_ORG ||
-    urlType === UrlType.BITBUCKET_DOT_ORG_SNIPPET
+    urlType === UrlType.GITHUB ||
+    urlType === UrlType.GITHUB_GIST ||
+    urlType === UrlType.BITBUCKET ||
+    urlType === UrlType.BITBUCKET_SNIPPET
   );
 }
 
@@ -75,10 +82,10 @@ export function isPotentiallyGit(urlType: UrlType) {
 export function isSingleFile(urlType: UrlType) {
   return (
     urlType === UrlType.FILE ||
-    urlType === UrlType.GIST_DOT_GITHUB_DOT_COM_FILE ||
-    urlType === UrlType.GITHUB_DOT_COM_FILE ||
-    urlType === UrlType.BITBUCKET_DOT_ORG_FILE ||
-    urlType === UrlType.BITBUCKET_DOT_ORG_SNIPPET_FILE
+    urlType === UrlType.GITHUB_GIST_FILE ||
+    urlType === UrlType.GITHUB_FILE ||
+    urlType === UrlType.BITBUCKET_FILE ||
+    urlType === UrlType.BITBUCKET_SNIPPET_FILE
   );
 }
 
@@ -94,20 +101,20 @@ export type ImportableUrl =
       url: URL;
     }
   | {
-      type: UrlType.GIST_DOT_GITHUB_DOT_COM;
+      type: UrlType.GITHUB_GIST;
       error?: undefined;
       gistId?: string;
       url: URL;
     }
   | {
-      type: UrlType.GIST_DOT_GITHUB_DOT_COM_FILE;
+      type: UrlType.GITHUB_GIST_FILE;
       error?: undefined;
       url: URL;
       gistId: string;
       fileName: string;
     }
   | {
-      type: UrlType.GITHUB_DOT_COM_FILE;
+      type: UrlType.GITHUB_FILE;
       error?: undefined;
       url: URL;
       org: string;
@@ -116,19 +123,19 @@ export type ImportableUrl =
       filePath: string;
     }
   | {
-      type: UrlType.GITHUB_DOT_COM;
+      type: UrlType.GITHUB;
       error?: undefined;
       url: URL;
       branch?: string;
     }
   | {
-      type: UrlType.BITBUCKET_DOT_ORG;
+      type: UrlType.BITBUCKET;
       error?: undefined;
       url: URL;
       branch?: string;
     }
   | {
-      type: UrlType.BITBUCKET_DOT_ORG_FILE;
+      type: UrlType.BITBUCKET_FILE;
       error?: undefined;
       url: URL;
       org: string;
@@ -137,7 +144,7 @@ export type ImportableUrl =
       filePath: string;
     }
   | {
-      type: UrlType.BITBUCKET_DOT_ORG_SNIPPET;
+      type: UrlType.BITBUCKET_SNIPPET;
       error?: undefined;
       snippetId: string;
       snippetName: string;
@@ -145,7 +152,7 @@ export type ImportableUrl =
       org: string;
     }
   | {
-      type: UrlType.BITBUCKET_DOT_ORG_SNIPPET_FILE;
+      type: UrlType.BITBUCKET_SNIPPET_FILE;
       error?: undefined;
       snippetId: string;
       snippetName: string;
@@ -171,7 +178,19 @@ export type ImportableUrl =
 
 export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]): ImportableUrl {
   const editorEnvelopeLocator = useEditorEnvelopeLocator();
+  const authProviders = useAuthProviders();
+  const matching = (url: URL, filters: { type: GitAuthProviderType; kind: GitAuthDomainKind }): boolean => {
+    console.log(authProviders, filters, url);
 
+    return authProviders.some((provider) => {
+      return (
+        provider.type === filters.type &&
+        provider.supportedGitRemoteDomains.some(
+          (domain) => domain.kind.includes(filters.kind) && domain.url === url.host
+        )
+      );
+    });
+  };
   const ifAllowed = useCallback(
     (url: ImportableUrl): ImportableUrl => {
       if (allowedUrlTypes && !allowedUrlTypes.includes(url.type) && url.type !== UrlType.INVALID) {
@@ -195,7 +214,8 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       return { type: UrlType.INVALID, error: "Invalid URL" };
     }
 
-    if (url.host === "github.com") {
+    if (matching(url, { type: AuthProviderType.github, kind: GitAuthDomainKind.repository })) {
+      console.log("url: github.com");
       const defaultBranchMatch = matchPath<{ org: string; repo: string }>(url.pathname, {
         path: "/:org/:repo",
         exact: true,
@@ -204,7 +224,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       });
 
       if (defaultBranchMatch) {
-        return ifAllowed({ type: UrlType.GITHUB_DOT_COM, url });
+        return ifAllowed({ type: UrlType.GITHUB, url });
       }
 
       const customRefNameMatch = matchPath<{ org: string; repo: string; tree: string }>(url.pathname, {
@@ -218,7 +238,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
         const gitRefName = customRefNameMatch.params.tree;
         const customGitRefNameUrl = new URL(urlString);
         customGitRefNameUrl.pathname = customGitRefNameUrl.pathname.replace(`/tree/${gitRefName}`, "");
-        return ifAllowed({ type: UrlType.GITHUB_DOT_COM, url: customGitRefNameUrl, branch: gitRefName });
+        return ifAllowed({ type: UrlType.GITHUB, url: customGitRefNameUrl, branch: gitRefName });
       }
 
       const gitHubFileMatch = matchPath<{ org: string; repo: string; tree: string; path: string }>(url.pathname, {
@@ -230,7 +250,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
 
       if (gitHubFileMatch) {
         return ifAllowed({
-          type: UrlType.GITHUB_DOT_COM_FILE,
+          type: UrlType.GITHUB_FILE,
           url: url,
           org: gitHubFileMatch.params.org,
           repo: gitHubFileMatch.params.repo,
@@ -242,7 +262,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       return { type: UrlType.NOT_SUPPORTED, error: "Unsupported GitHub URL", url };
     }
 
-    if (url.host === "bitbucket.org") {
+    if (matching(url, { type: AuthProviderType.bitbucket, kind: GitAuthDomainKind.repository })) {
       const defaultBranchMatch = matchPath<{ org: string; repo: string }>(url.pathname, {
         path: "/:org/:repo",
         exact: true,
@@ -251,7 +271,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       });
 
       if (defaultBranchMatch) {
-        return ifAllowed({ type: UrlType.BITBUCKET_DOT_ORG, url });
+        return ifAllowed({ type: UrlType.BITBUCKET, url });
       }
 
       const customRefNameMatch = matchPath<{ org: string; repo: string; tree: string }>(url.pathname, {
@@ -265,7 +285,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
         const gitRefName = customRefNameMatch.params.tree;
         const customGitRefNameUrl = new URL(urlString);
         customGitRefNameUrl.pathname = customGitRefNameUrl.pathname.replace(`/src/${gitRefName}`, "");
-        return ifAllowed({ type: UrlType.BITBUCKET_DOT_ORG, url: customGitRefNameUrl, branch: gitRefName });
+        return ifAllowed({ type: UrlType.BITBUCKET, url: customGitRefNameUrl, branch: gitRefName });
       }
 
       const bitbucketFileMatch = matchPath<{ org: string; repo: string; tree: string; path: string }>(url.pathname, {
@@ -277,7 +297,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
 
       if (bitbucketFileMatch) {
         return ifAllowed({
-          type: UrlType.BITBUCKET_DOT_ORG_FILE,
+          type: UrlType.BITBUCKET_FILE,
           url: url,
           org: bitbucketFileMatch.params.org,
           repo: bitbucketFileMatch.params.repo,
@@ -285,7 +305,8 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
           filePath: bitbucketFileMatch.params.path,
         });
       }
-
+    }
+    if (matching(url, { type: AuthProviderType.bitbucket, kind: GitAuthDomainKind.snippet })) {
       const snippetMatch = matchPath<{ org: string; snippetId: string; snippetName: string }>(url.pathname, {
         path: "/:org/workspace/snippets/:snippetId/:snippetName",
         exact: true,
@@ -293,7 +314,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       });
       if (snippetMatch && url.hash) {
         return ifAllowed({
-          type: UrlType.BITBUCKET_DOT_ORG_SNIPPET_FILE,
+          type: UrlType.BITBUCKET_SNIPPET_FILE,
           url: url,
           snippetId: snippetMatch.params.snippetId,
           snippetName: snippetMatch.params.snippetName,
@@ -304,7 +325,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
         const newURL = new URL(url);
         newURL.pathname = `/snippets/${snippetMatch.params.org}/${snippetMatch.params.snippetId}/${snippetMatch.params.snippetName}.git`;
         return ifAllowed({
-          type: UrlType.BITBUCKET_DOT_ORG_SNIPPET,
+          type: UrlType.BITBUCKET_SNIPPET,
           url: newURL,
           snippetId: snippetMatch.params.snippetId,
           snippetName: snippetMatch.params.snippetName,
@@ -318,7 +339,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       });
       if (snippetCloneUrlMatch) {
         return ifAllowed({
-          type: UrlType.BITBUCKET_DOT_ORG_SNIPPET,
+          type: UrlType.BITBUCKET_SNIPPET,
           url: url,
           snippetId: snippetCloneUrlMatch.params.snippetId,
           snippetName: snippetCloneUrlMatch.params.snippetName,
@@ -329,7 +350,8 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       return { type: UrlType.NOT_SUPPORTED, error: "Unsupported Bitbucket URL", url };
     }
 
-    if (url.host === "raw.githubusercontent.com") {
+    if (matching(url, { type: AuthProviderType.github, kind: GitAuthDomainKind.rawfile })) {
+      console.log("url: raw.githubusercontent.com");
       const gitHubRawFileMatch = matchPath<{ org: string; repo: string; tree: string; path: string }>(url.pathname, {
         path: "/:org/:repo/:tree/:path*",
         exact: true,
@@ -339,7 +361,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
 
       if (gitHubRawFileMatch) {
         return ifAllowed({
-          type: UrlType.GITHUB_DOT_COM_FILE,
+          type: UrlType.GITHUB_FILE,
           url: url,
           org: gitHubRawFileMatch.params.org,
           repo: gitHubRawFileMatch.params.repo,
@@ -351,7 +373,8 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       return { type: UrlType.NOT_SUPPORTED, error: "Unsupported GitHub raw URL", url };
     }
 
-    if (url.host === "gist.github.com" || url.host === "gist.githubusercontent.com") {
+    if (matching(url, { type: AuthProviderType.github, kind: GitAuthDomainKind.gist })) {
+      console.log("url: gist.githu.com");
       const gistMatch = matchPath<{ user: string; gistId: string }>(url.pathname, {
         path: "/:user/:gistId",
         exact: true,
@@ -376,7 +399,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
 
       if (gistMatch && url.hash) {
         return ifAllowed({
-          type: UrlType.GIST_DOT_GITHUB_DOT_COM_FILE,
+          type: UrlType.GITHUB_GIST_FILE,
           url: url,
           gistId: gistMatch.params.gistId,
           fileName: url.hash.replace("#file-", "").replace(/-([^-]*)$/, ".$1"),
@@ -385,7 +408,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
 
       if (rawGistMatch) {
         return ifAllowed({
-          type: UrlType.GIST_DOT_GITHUB_DOT_COM_FILE,
+          type: UrlType.GITHUB_GIST_FILE,
           url: url,
           gistId: rawGistMatch.params.gistId,
           fileName: rawGistMatch.params.fileName,
@@ -393,7 +416,7 @@ export function useImportableUrl(urlString?: string, allowedUrlTypes?: UrlType[]
       }
 
       return ifAllowed({
-        type: UrlType.GIST_DOT_GITHUB_DOT_COM,
+        type: UrlType.GITHUB_GIST,
         url,
         gistId: (gistMatch ?? directGistMatch)?.params.gistId.replace(".git", ""),
       });

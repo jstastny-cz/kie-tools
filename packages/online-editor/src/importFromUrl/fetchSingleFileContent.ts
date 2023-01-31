@@ -8,7 +8,7 @@ export async function fetchSingleFileContent(
   bitbucketClient: BitbucketClientApi
 ): Promise<{ rawUrl?: URL; content?: string; error?: string }> {
   let rawUrl = importableUrl.url as URL;
-  if (importableUrl.type === UrlType.GITHUB_DOT_COM_FILE) {
+  if (importableUrl.type === UrlType.GITHUB_FILE) {
     const res = await gitHubClient.repos.getContent({
       repo: importableUrl.repo,
       owner: importableUrl.org,
@@ -21,7 +21,7 @@ export async function fetchSingleFileContent(
     rawUrl = new URL((res.data as any).download_url);
   }
 
-  if (importableUrl.type === UrlType.GIST_DOT_GITHUB_DOT_COM_FILE) {
+  if (importableUrl.type === UrlType.GITHUB_GIST_FILE) {
     const { data } = await gitHubClient.gists.get({ gist_id: importableUrl.gistId });
     const fileName =
       Object.keys(data.files!).find((k) => k.toLowerCase() === importableUrl.fileName.toLowerCase()) ??
@@ -29,7 +29,7 @@ export async function fetchSingleFileContent(
     rawUrl = new URL((data as any).files[fileName].raw_url);
   }
 
-  if (importableUrl.type === UrlType.BITBUCKET_DOT_ORG_FILE) {
+  if (importableUrl.type === UrlType.BITBUCKET_FILE) {
     const repoResponse = await bitbucketClient.getRepositoryContents({
       workspace: importableUrl.org,
       repository: importableUrl.repo,
@@ -46,7 +46,7 @@ export async function fetchSingleFileContent(
     }
     rawUrl = new URL(json.links.self.href);
   }
-  if (importableUrl.type === UrlType.BITBUCKET_DOT_ORG_SNIPPET_FILE) {
+  if (importableUrl.type === UrlType.BITBUCKET_SNIPPET_FILE) {
     const snippetResponse = await bitbucketClient.getSnippet({
       workspace: importableUrl.org,
       snippetId: importableUrl.snippetId,

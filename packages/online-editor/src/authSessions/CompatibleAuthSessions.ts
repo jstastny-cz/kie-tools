@@ -70,7 +70,7 @@ export function isAuthSessionCompatibleWithUrlDomain(args: {
     (args.authProvider?.type === "github" ||
       args.authProvider?.type === "gitlab" ||
       args.authProvider?.type === "bitbucket") &&
-    new Set(args.authProvider.supportedGitRemoteDomains).has(args.urlDomain) &&
+    new Set(args.authProvider.supportedGitRemoteDomains.flatMap((it) => it.url)).has(args.urlDomain) &&
     args.status === AuthSessionStatus.VALID
   ) {
     return true;

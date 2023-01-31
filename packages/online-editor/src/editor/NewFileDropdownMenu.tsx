@@ -163,10 +163,10 @@ export function NewFileDropdownMenu(props: {
     useMemo(
       () => [
         UrlType.FILE,
-        UrlType.GIST_DOT_GITHUB_DOT_COM_FILE,
-        UrlType.GITHUB_DOT_COM_FILE,
-        UrlType.BITBUCKET_DOT_ORG_FILE,
-        UrlType.BITBUCKET_DOT_ORG_SNIPPET_FILE,
+        UrlType.GITHUB_GIST_FILE,
+        UrlType.GITHUB_FILE,
+        UrlType.BITBUCKET_FILE,
+        UrlType.BITBUCKET_SNIPPET_FILE,
       ],
       []
     )

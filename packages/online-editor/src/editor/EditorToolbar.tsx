@@ -244,7 +244,7 @@ export function EditorToolbar(props: Props) {
   useCancelableEffect(
     useCallback(
       ({ canceled }) => {
-        if (gitHubGist || workspaceImportableUrl.type !== UrlType.GIST_DOT_GITHUB_DOT_COM) {
+        if (gitHubGist || workspaceImportableUrl.type !== UrlType.GITHUB_GIST) {
           return;
         }
 
@@ -271,7 +271,7 @@ export function EditorToolbar(props: Props) {
   useCancelableEffect(
     useCallback(
       ({ canceled }) => {
-        if (bitbucketSnippet || workspaceImportableUrl.type !== UrlType.BITBUCKET_DOT_ORG_SNIPPET) {
+        if (bitbucketSnippet || workspaceImportableUrl.type !== UrlType.BITBUCKET_SNIPPET) {
           return;
         }
 
@@ -1580,7 +1580,7 @@ export function EditorToolbar(props: Props) {
                   </FlexItem>
                   {/*<Divider inset={{ default: "insetMd" }} isVertical={true} />*/}
                   {workspace.descriptor.origin.kind === WorkspaceKind.GIT &&
-                    workspaceImportableUrl.type === UrlType.GITHUB_DOT_COM && (
+                    workspaceImportableUrl.type === UrlType.GITHUB && (
                       <FlexItem
                         style={{
                           minWidth: "137px",

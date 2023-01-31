@@ -20,7 +20,7 @@ import { routes } from "../src/navigation/Routes";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { env } from "../env";
-import { AuthProviderGroup, AuthProviderType } from "../src/authProviders/AuthProvidersApi";
+import { AuthProviderGroup, AuthProviderType, GitAuthDomainKind } from "../src/authProviders/AuthProvidersApi";
 const buildEnv: any = env; // build-env is not typed
 
 export const defaultEnvJson: EnvJson = {
@@ -31,7 +31,12 @@ export const defaultEnvJson: EnvJson = {
     {
       id: "github_dot_com",
       domain: "github.com",
-      supportedGitRemoteDomains: ["github.com", "gist.github.com"],
+      supportedGitRemoteDomains: [
+        { url: "github.com", kind: [GitAuthDomainKind.repository] },
+        { url: "raw.githubusercontent.com", kind: [GitAuthDomainKind.rawfile] },
+        { url: "gist.github.com", kind: [GitAuthDomainKind.gist] },
+        { url: "gist.githubusercontent.com", kind: [GitAuthDomainKind.gist] },
+      ],
       type: AuthProviderType.github,
       name: "GitHub",
       enabled: true,
@@ -41,7 +46,7 @@ export const defaultEnvJson: EnvJson = {
     {
       id: "gitlab_dot_com",
       domain: "gitlab.com",
-      supportedGitRemoteDomains: ["gitlab.com"],
+      supportedGitRemoteDomains: [{ url: "gitlab.com", kind: [GitAuthDomainKind.repository] }],
       type: AuthProviderType.gitlab,
       name: "GitLab",
       enabled: false,
@@ -51,7 +56,9 @@ export const defaultEnvJson: EnvJson = {
     {
       id: "bitbucket_dot_org",
       domain: "bitbucket.org",
-      supportedGitRemoteDomains: ["bitbucket.org"],
+      supportedGitRemoteDomains: [
+        { url: "bitbucket.org", kind: [GitAuthDomainKind.repository, GitAuthDomainKind.snippet] },
+      ],
       type: AuthProviderType.bitbucket,
       name: "Bitbucket",
       enabled: true,

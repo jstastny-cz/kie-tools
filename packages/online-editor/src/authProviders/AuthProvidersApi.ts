@@ -47,6 +47,18 @@ export type OpenShiftAuthProvider = {
   group: AuthProviderGroup.CLOUD;
 };
 
+export enum GitAuthDomainKind {
+  repository = "repository",
+  gist = "gist",
+  snippet = "snippet",
+  rawfile = "rawfile",
+}
+
+export type GitAuthProviderDomain = {
+  kind: GitAuthDomainKind[];
+  url: string;
+};
+
 export type GitAuthProvider = {
   id: string;
   type: GitAuthProviderType;
@@ -54,7 +66,7 @@ export type GitAuthProvider = {
   domain: string;
   iconPath?: string;
   enabled: boolean;
-  supportedGitRemoteDomains: string[];
+  supportedGitRemoteDomains: GitAuthProviderDomain[];
   group: AuthProviderGroup.GIT;
 };
 

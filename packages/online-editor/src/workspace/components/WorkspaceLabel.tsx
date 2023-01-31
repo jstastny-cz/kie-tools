@@ -38,7 +38,7 @@ export function WorkspaceLabel(props: { descriptor?: WorkspaceDescriptor }) {
       return <></>;
     }
 
-    if (workspaceImportableUrl.type === UrlType.GITHUB_DOT_COM) {
+    if (workspaceImportableUrl.type === UrlType.GITHUB) {
       return (
         <Label>
           <GithubIcon />
