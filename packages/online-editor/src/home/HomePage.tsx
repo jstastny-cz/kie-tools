@@ -43,10 +43,13 @@ import { CubesIcon } from "@patternfly/react-icons/dist/js/icons/cubes-icon";
 import { useWorkspaces } from "@kie-tools-core/workspaces-git-fs/dist/context/WorkspacesContext";
 import { OnlineEditorPage } from "../pageTemplate/OnlineEditorPage";
 import { useWorkspaceDescriptorsPromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspacesHooks";
-import { useWorkspacePromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
+import {
+  useWorkspaceGitStatusPromise,
+  useWorkspacePromise,
+} from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
 import { ExclamationTriangleIcon } from "@patternfly/react-icons/dist/js/icons/exclamation-triangle-icon";
 import { FileLabel } from "../filesList/FileLabel";
-import { PromiseStateWrapper } from "@kie-tools-core/react-hooks/dist/PromiseState";
+import { PromiseStateWrapper, useCombinedPromiseState } from "@kie-tools-core/react-hooks/dist/PromiseState";
 import { Gallery } from "@patternfly/react-core/dist/js/layouts/Gallery";
 import { Divider } from "@patternfly/react-core/dist/js/components/Divider";
 import {
@@ -67,21 +70,23 @@ import { QueryParams } from "../navigation/Routes";
 import { Bullseye } from "@patternfly/react-core/dist/js/layouts/Bullseye";
 import { UploadCard } from "./UploadCard";
 import { ImportFromUrlCard } from "../importFromUrl/ImportFromUrlHomePageCard";
-import { WorkspaceKind } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceOrigin";
+import {
+  isGitBasedWorkspaceKind,
+  WorkspaceKind,
+} from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceOrigin";
 import { PlusIcon } from "@patternfly/react-icons/dist/js/icons/plus-icon";
 import { NewFileDropdownMenu } from "../editor/NewFileDropdownMenu";
 import { Spinner } from "@patternfly/react-core/dist/js/components/Spinner";
 import { useRoutes } from "../navigation/Hooks";
 import { ErrorBoundary } from "../reactExt/ErrorBoundary";
 import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceDescriptor";
-import { VariableSizeList } from "react-window";
-import AutoSizer from "react-virtualized-auto-sizer";
-import { FileDataList, FileLink, getFileDataListHeight, SingleFileWorkspaceListItem } from "../filesList/FileDataList";
+import { FileLink, SingleFileWorkspaceListItem } from "../filesList/FileDataList";
 import { WorkspaceListItem } from "../workspace/components/WorkspaceListItem";
 import { WorkspaceLoadingCard } from "../workspace/components/WorkspaceLoadingCard";
 import { Tooltip } from "@patternfly/react-core/dist/js/components/Tooltip";
 import { ResponsiveDropdown } from "../ResponsiveDropdown/ResponsiveDropdown";
 import { ResponsiveDropdownToggle } from "../ResponsiveDropdown/ResponsiveDropdownToggle";
+import { FilesMenu, MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX } from "../editor/FileSwitcher";
 
 export function HomePage() {
   const routes = useRoutes();
@@ -197,7 +202,11 @@ export function HomePage() {
                 </DrawerSection>
                 <DrawerContent
                   panelContent={
-                    <DrawerPanelContent isResizable={true} minSize={"40%"} maxSize={"80%"}>
+                    <DrawerPanelContent
+                      isResizable={true}
+                      minSize={`max(40%, ${MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX + 30}px)`}
+                      maxSize={"80%"}
+                    >
                       <WorkspacesListDrawerPanelContent
                         key={expandedWorkspaceId}
                         workspaceId={expandedWorkspaceId}
@@ -478,26 +487,7 @@ export function NewModelCard(props: { title: string; extension: SupportedFileExt
 export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | undefined; onClose: () => void }) {
   const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const workspacePromise = useWorkspacePromise(props.workspaceId);
-
-  const otherFiles = useMemo(
-    () =>
-      (workspacePromise.data?.files ?? [])
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .filter((file) => !editorEnvelopeLocator.hasMappingFor(file.relativePath)),
-    [editorEnvelopeLocator, workspacePromise.data?.files]
-  );
-
-  const models = useMemo(
-    () =>
-      (workspacePromise.data?.files ?? [])
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .filter((file) => editorEnvelopeLocator.hasMappingFor(file.relativePath)),
-    [editorEnvelopeLocator, workspacePromise.data?.files]
-  );
-
-  const arrayWithModelsThenOtherFiles = useMemo(() => {
-    return [...models, ...otherFiles];
-  }, [models, otherFiles]);
+  const workspaceGitStatusPromise = useWorkspaceGitStatusPromise(workspacePromise.data?.descriptor);
 
   const [isNewFileDropdownMenuOpen, setNewFileDropdownMenuOpen] = useState(false);
 
@@ -517,7 +507,7 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
             <Flex>
               <FlexItem>
                 <TextContent>
-                  <Text component={TextVariants.h3}>{`Models in '${workspace.descriptor.name}'`}</Text>
+                  <Text component={TextVariants.h3}>{`Contents of '${workspace.descriptor.name}'`}</Text>
                 </TextContent>
               </FlexItem>
               <FlexItem>
@@ -545,11 +535,10 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
                 </ResponsiveDropdown>
               </FlexItem>
             </Flex>
-            {(workspace.descriptor.origin.kind === WorkspaceKind.GITHUB_GIST ||
-              workspace.descriptor.origin.kind === WorkspaceKind.GIT) && (
+            {isGitBasedWorkspaceKind(workspace.descriptor.origin.kind) && (
               <TextContent>
                 <Text component={TextVariants.small}>
-                  <i>{workspace.descriptor.origin.url.toString()}</i>
+                  <i>{workspace.descriptor.origin.url}</i>
                 </Text>
               </TextContent>
             )}
@@ -557,25 +546,14 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
               <DrawerCloseButton onClick={props.onClose} />
             </DrawerActions>
           </DrawerHead>
-          <DrawerPanelBody>
-            <AutoSizer>
-              {({ height, width }) => (
-                <VariableSizeList
-                  height={height}
-                  itemCount={arrayWithModelsThenOtherFiles.length}
-                  itemSize={(index) => getFileDataListHeight(arrayWithModelsThenOtherFiles[index])}
-                  width={width}
-                >
-                  {({ index, style }) => (
-                    <FileDataList
-                      file={arrayWithModelsThenOtherFiles[index]}
-                      isEditable={index < models.length}
-                      style={style}
-                    />
-                  )}
-                </VariableSizeList>
-              )}
-            </AutoSizer>
+          <DrawerPanelBody style={{ padding: "0" }}>
+            <FilesMenu
+              workspace={workspace}
+              workspaceGitStatusPromise={workspaceGitStatusPromise}
+              onDeletedWorkspaceFile={() => {}}
+              isMenuOpen={true}
+              isNoHeightMaxLimit
+            />
           </DrawerPanelBody>
         </>
       )}

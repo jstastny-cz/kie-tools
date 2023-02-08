@@ -61,7 +61,10 @@ import { Flex, FlexItem } from "@patternfly/react-core/dist/js/layouts/Flex";
 import { NewFileDropdownMenu } from "./NewFileDropdownMenu";
 import { PageHeaderToolsItem, PageSection } from "@patternfly/react-core/dist/js/components/Page";
 import { FileLabel } from "../filesList/FileLabel";
-import { useWorkspacePromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
+import {
+  useWorkspaceGitStatusPromise,
+  useWorkspacePromise,
+} from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
 import { OutlinedHddIcon } from "@patternfly/react-icons/dist/js/icons/outlined-hdd-icon";
 import { DesktopIcon } from "@patternfly/react-icons/dist/js/icons/desktop-icon";
 import { FileSwitcher } from "./FileSwitcher";
@@ -87,7 +90,7 @@ import { useEditorEnvelopeLocator } from "../envelopeLocator/hooks/EditorEnvelop
 import { useCancelableEffect } from "@kie-tools-core/react-hooks/dist/useCancelableEffect";
 import type { RestEndpointMethodTypes as OctokitRestEndpointMethodTypes } from "@octokit/plugin-rest-endpoint-methods/dist-types/generated/parameters-and-response-types";
 import { useSharedValue } from "@kie-tools-core/envelope-bus/dist/hooks";
-import { WorkspaceStatusIndicator } from "../workspace/components/WorkspaceStatusIndicator";
+import { listDeletedFiles, WorkspaceStatusIndicator } from "../workspace/components/WorkspaceStatusIndicator";
 import { ResponsiveDropdown } from "../ResponsiveDropdown/ResponsiveDropdown";
 import { ResponsiveDropdownToggle } from "../ResponsiveDropdown/ResponsiveDropdownToggle";
 import { useAuthSession } from "../authSessions/AuthSessionsContext";
@@ -173,6 +176,7 @@ export function EditorToolbar(props: Props) {
   const copyContentTextArea = useRef<HTMLTextAreaElement>(null);
   const [isNewFileDropdownMenuOpen, setNewFileDropdownMenuOpen] = useState(false);
   const workspacePromise = useWorkspacePromise(props.workspaceFile.workspaceId);
+  const workspaceGitStatusPromise = useWorkspaceGitStatusPromise(workspacePromise.data?.descriptor);
   const [isGistOrSnippetLoading, setGistOrSnippetLoading] = useState(false);
   const [gitHubGist, setGitHubGist] =
     useState<OctokitRestEndpointMethodTypes["gists"]["get"]["response"]["data"] | undefined>(undefined);
@@ -925,17 +929,10 @@ export function EditorToolbar(props: Props) {
     }
   }, [props.workspaceFile, workspacePromise.data]);
 
-  const deleteWorkspaceFile = useCallback(async () => {
+  const handleDeletedWorkspaceFile = useCallback(() => {
     if (!workspacePromise.data) {
       return;
     }
-
-    if (workspacePromise.data.files.length === 1) {
-      await workspaces.deleteWorkspace({ workspaceId: props.workspaceFile.workspaceId });
-      history.push({ pathname: routes.home.path({}) });
-      return;
-    }
-
     const nextFile = workspacePromise.data.files
       .filter((f) => {
         return (
@@ -943,10 +940,6 @@ export function EditorToolbar(props: Props) {
         );
       })
       .pop();
-
-    await workspaces.deleteFile({
-      file: props.workspaceFile,
-    });
 
     if (!nextFile) {
       history.push({ pathname: routes.home.path({}) });
@@ -960,7 +953,31 @@ export function EditorToolbar(props: Props) {
         extension: nextFile.extension,
       }),
     });
-  }, [routes, history, workspacePromise.data, props.workspaceFile, workspaces, editorEnvelopeLocator]);
+  }, [
+    editorEnvelopeLocator,
+    history,
+    props.workspaceFile.relativePath,
+    routes.home,
+    routes.workspaceWithFilePath,
+    workspacePromise.data,
+  ]);
+
+  const deleteWorkspaceFile = useCallback(async () => {
+    if (!workspacePromise.data) {
+      return;
+    }
+
+    if (workspacePromise.data.files.length === 1) {
+      await workspaces.deleteWorkspace({ workspaceId: props.workspaceFile.workspaceId });
+      history.push({ pathname: routes.home.path({}) });
+      return;
+    }
+
+    await workspaces.deleteFile({
+      file: props.workspaceFile,
+    });
+    handleDeletedWorkspaceFile();
+  }, [workspacePromise.data, workspaces, props.workspaceFile, handleDeletedWorkspaceFile, history, routes.home]);
 
   const workspaceNameRef = useRef<HTMLInputElement>(null);
 
@@ -1492,11 +1509,16 @@ export function EditorToolbar(props: Props) {
       );
     }, [])
   );
-
   const canSeeWorkspaceToolbar = useMemo(
     () =>
-      workspacePromise.data?.descriptor.origin.kind !== WorkspaceKind.LOCAL || workspacePromise.data?.files.length > 1,
-    [workspacePromise.data?.descriptor.origin.kind, workspacePromise.data?.files.length]
+      workspacePromise.data?.descriptor.origin.kind !== WorkspaceKind.LOCAL ||
+      workspacePromise.data?.files.length +
+        listDeletedFiles({
+          workspaceDescriptor: workspacePromise.data.descriptor,
+          workspaceGitStatus: workspaceGitStatusPromise.data,
+        }).length >
+        1,
+    [workspaceGitStatusPromise.data, workspacePromise.data?.descriptor, workspacePromise.data?.files.length]
   );
 
   return (
@@ -1576,7 +1598,12 @@ export function EditorToolbar(props: Props) {
                         </div>
                       </FlexItem>
                       <FlexItem>
-                        <WorkspaceStatusIndicator workspace={workspace} />
+                        <WorkspaceStatusIndicator
+                          workspaceDescriptor={workspace.descriptor}
+                          workspaceGitStatusPromise={workspaceGitStatusPromise}
+                          currentWorkspaceFile={props.workspaceFile}
+                          onDeletedWorkspaceFile={handleDeletedWorkspaceFile}
+                        />
                       </FlexItem>
                     </Flex>
                   </FlexItem>
@@ -1698,7 +1725,12 @@ export function EditorToolbar(props: Props) {
                   <PageHeaderToolsItem visibility={{ default: "visible" }}>
                     <Flex flexWrap={{ default: "nowrap" }} alignItems={{ default: "alignItemsCenter" }}>
                       <FlexItem style={{ minWidth: 0 }}>
-                        <FileSwitcher workspace={workspace} workspaceFile={props.workspaceFile} />
+                        <FileSwitcher
+                          workspace={workspace}
+                          workspaceGitStatusPromise={canSeeWorkspaceToolbar ? workspaceGitStatusPromise : undefined}
+                          workspaceFile={props.workspaceFile}
+                          onDeletedWorkspaceFile={handleDeletedWorkspaceFile}
+                        />
                       </FlexItem>
                       <FlexItem>
                         {(isEdited && (

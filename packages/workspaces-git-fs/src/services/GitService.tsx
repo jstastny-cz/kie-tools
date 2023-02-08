@@ -68,6 +68,16 @@ export interface RemoteRefArgs {
   };
 }
 
+export enum FileStageStatus {
+  added = "added",
+  modified = "modified",
+  deleted = "deleted",
+}
+export type FileStageStatusType = {
+  path: string;
+  status: FileStageStatus;
+};
+
 export class GitService {
   public constructor(private readonly corsProxy: Promise<string>) {}
 
@@ -155,6 +165,22 @@ export class GitService {
       dir: args.dir,
       ref: args.ref,
       remote: args.remote,
+    });
+  }
+
+  public async checkoutFilesFromLocalHead(args: {
+    fs: KieSandboxWorkspacesFs;
+    dir: string;
+    ref?: string;
+    filepaths: string[];
+  }) {
+    await git.checkout({
+      fs: args.fs,
+      dir: args.dir,
+      ref: args.ref,
+      filepaths: args.filepaths,
+      noUpdateHead: true,
+      force: true,
     });
   }
 
@@ -327,7 +353,7 @@ export class GitService {
     fs: KieSandboxWorkspacesFs;
     dir: string;
     exclude: (filepath: string) => boolean;
-  }): Promise<string[]> {
+  }): Promise<FileStageStatusType[]> {
     const now = performance.now();
     console.time(`${now}: hasLocalChanges`);
     const pseudoStatusMatrix = await git.walk({
@@ -374,7 +400,26 @@ export class GitService {
     const _WORKDIR = 2;
     const _STAGE = 3;
     const _FILE = 0;
-    const ret = pseudoStatusMatrix.filter((row: any) => row[_WORKDIR] !== row[_STAGE]).map((row: any) => row[_FILE]);
+    const ret = pseudoStatusMatrix
+      .filter((row: any) => row[_WORKDIR] !== row[_STAGE]) // filter differences with staged state
+      .map((row: any[]) => {
+        // if both _WORKDIR and _STAGE are set, the file is staged and modified (from above filter)
+        // if _WORKDIR is set only, it means the file is not yet staged
+        // if _STAGE is set only, it means the file has been deleted in workspace
+        let status: FileStageStatus;
+        if (row[_WORKDIR] && !row[_STAGE]) {
+          status = FileStageStatus.added;
+        } else if (!row[_WORKDIR] && row[_STAGE]) {
+          status = FileStageStatus.deleted;
+        } else {
+          status = FileStageStatus.modified;
+        }
+        const result: FileStageStatusType = {
+          path: row[_FILE],
+          status,
+        };
+        return result;
+      });
     console.timeEnd(`${now}: hasLocalChanges`);
     return ret;
   }

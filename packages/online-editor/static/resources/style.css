@@ -659,10 +659,98 @@ section.kie-tools--settings-tab {
   padding: 0;
 }
 
+.kie-tools--file-list-item-enabled a,
+.kie-tools--file-list-item-deleted a,
+.kie-tools--file-list-item-readonly a {
+  text-decoration: none;
+  color: var(--pf-global--Color--100);
+}
+
+.kie-tools--file-list-item-enabled {
+  cursor: pointer;
+}
+.kie-tools--file-list-item-enabled:hover .pf-c-content {
+  text-decoration: underline;
+}
+.kie-tools--file-list-item-deleted {
+  cursor: not-allowed;
+}
+
+.kie-tools--file-list-item-readonly:hover {
+  cursor: default;
+}
+
 .kie-sandbox--file-switcher .pf-c-dropdown__menu {
   min-width: 0;
+}
+
+.kie-sandbox--files-menu .pf-c-menu__list-item {
+  position: static;
+}
+
+.kie-sandbox--files-menu .kie-sandbox--files-menu--label {
+  --kie-sandbox--files-menu--title-padding: var(--pf-global--spacer--md);
+  padding-left: var(--kie-sandbox--files-menu--title-padding);
+  padding-right: var(--kie-sandbox--files-menu--title-padding);
 }
 
 .pf-c-menu__item-description {
   word-break: normal !important;
 }
+
+/* GitStatusIndicator, GitStatusIndicatorActions: begin */
+.kie-tools--git-status-indicator button {
+  padding: 0;
+}
+.kie-tools--git-status-indicator-children-hoverable {
+  visibility: hidden;
+}
+.kie-tools--git-status-indicator:hover .kie-tools--git-status-indicator-children-hoverable {
+  visibility: visible;
+}
+.kie-tools--git-status-indicator .pf-c-dropdown__toggle.kie-tools--no-whitespace-dropdown-toggle {
+  --pf-c-dropdown__toggle--PaddingLeft: 0;
+  --pf-c-dropdown__toggle-icon--MarginLeft: 0;
+}
+
+.kie-tools--alert-dropdown-item {
+  display: flex;
+  align-items: baseline;
+  cursor: default;
+}
+.kie-tools--alert-dropdown-item .pf-c-alert {
+  display: flex;
+  flex-direction: column;
+}
+.kie-tools--alert-dropdown-item .pf-c-alert__action-group {
+  display: flex;
+  flex-direction: row;
+  align-self: flex-end;
+}
+.kie-tools--alert-dropdown-item .pf-c-alert__description {
+  white-space: normal;
+  min-width: 200px;
+}
+.kie-tools--alert-dropdown-right .kie-tools--alert-dropdown-item {
+  flex-direction: row-reverse;
+}
+.kie-tools--alert-dropdown-left .pf-c-alert.kie-tools--git-status-indicator-actions-alert-expanded {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.kie-tools--alert-dropdown-right .pf-c-alert.kie-tools--git-status-indicator-actions-alert-expanded {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.pf-c-popover[data-popper-placement="left"] .pf-c-alert.kie-tools--git-status-indicator-actions-alert-expanded,
+.pf-c-popover[data-popper-placement="top"] .pf-c-alert.kie-tools--git-status-indicator-actions-alert-expanded,
+.pf-c-popover[data-popper-placement="top-end"] .pf-c-alert.kie-tools--git-status-indicator-actions-alert-expanded {
+  flex-direction: column;
+  align-items: flex-start;
+  display: flex;
+}
+.kie-tools--file-switcher-no-padding-menu-item .pf-c-menu__item-text {
+  overflow: visible; /* so that popover appears */
+}
+/* GitStatusIndicator, GitStatusIndicatorActions: end */

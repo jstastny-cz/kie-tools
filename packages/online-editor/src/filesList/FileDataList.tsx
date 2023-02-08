@@ -32,6 +32,16 @@ import { useRoutes } from "../navigation/Hooks";
 import { TaskIcon } from "@patternfly/react-icons/dist/js/icons/task-icon";
 import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceDescriptor";
 import { WorkspaceDescriptorDates } from "../workspace/components/WorkspaceDescriptorDates";
+import { EyeIcon } from "@patternfly/react-icons/dist/js/icons/eye-icon";
+
+import { GitStatusIndicator } from "../workspace/components/WorkspaceStatusIndicator";
+import { WorkspaceGitStatusType } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
+import { switchExpression } from "../switchExpression/switchExpression";
+import {
+  GitStatusIndicatorActions,
+  GitStatusIndicatorActionVariant,
+} from "../workspace/components/GitStatusIndicatorActions";
+import { PromiseState } from "@kie-tools-core/react-hooks/dist/PromiseState";
 
 const FILE_DATA_LIST_HEIGHTS = {
   atRoot: 55 + 24,
@@ -42,14 +52,50 @@ export function getFileDataListHeight(file: WorkspaceFile) {
   return file.relativePath.indexOf("/") >= 0 ? FILE_DATA_LIST_HEIGHTS.atSubDir : FILE_DATA_LIST_HEIGHTS.atRoot;
 }
 
-export function FileListItem(props: { file: WorkspaceFile; isEditable: boolean }) {
+export enum FileListItemDisplayMode {
+  enabled = "enabled",
+  readonly = "readonly",
+  deleted = "deleted",
+}
+
+export function FileListItem(props: {
+  file: WorkspaceFile;
+  displayMode: FileListItemDisplayMode;
+  workspaceDescriptor: WorkspaceDescriptor;
+  workspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
+  isCurrentWorkspaceFile?: boolean;
+  onDeletedWorkspaceFile?: () => void;
+}) {
+  const [keepGitStatusActionsDisplayed, setKeepGitStatusActionsDisplayed] = React.useState(false);
   const fileDirPath = props.file.relativeDirPath.split("/").join(" > ");
-  const fileName = props.isEditable ? props.file.nameWithoutExtension : props.file.name;
+  const fileName =
+    props.displayMode === FileListItemDisplayMode.enabled ? props.file.nameWithoutExtension : props.file.name;
+
   return (
     <>
-      <Flex flexWrap={{ default: "nowrap" }}>
+      <Flex
+        flexWrap={{ default: "nowrap" }}
+        onClick={(ev) => {
+          if (props.displayMode !== FileListItemDisplayMode.enabled) {
+            // this prevents the FileSwitcher from closing on click.
+            ev.stopPropagation();
+            ev.preventDefault();
+          }
+        }}
+      >
+        {props.isCurrentWorkspaceFile && (
+          <FlexItem align={{ default: "alignLeft" }}>
+            <EyeIcon title="Currently selected file." />
+          </FlexItem>
+        )}
         <FlexItem style={{ minWidth: 0 /* This is to make the flex parent not overflow horizontally */ }}>
-          <Tooltip distance={5} position={"top-start"} content={fileName}>
+          <Tooltip
+            distance={5}
+            position={"top-start"}
+            content={
+              fileName + (props.displayMode === FileListItemDisplayMode.deleted ? " (Deleted in workspace.)" : "")
+            }
+          >
             <TextContent>
               <Text
                 component={TextVariants.p}
@@ -67,6 +113,27 @@ export function FileListItem(props: { file: WorkspaceFile; isEditable: boolean }
         <FlexItem>
           <FileLabel extension={props.file.extension} />
         </FlexItem>
+        {props.workspaceGitStatusPromise && (
+          <FlexItem align={{ default: "alignRight" }}>
+            <GitStatusIndicator
+              workspaceDescriptor={props.workspaceDescriptor}
+              workspaceGitStatusPromise={props.workspaceGitStatusPromise}
+              workspaceFile={props.file}
+              isHoverable={!keepGitStatusActionsDisplayed}
+            >
+              <GitStatusIndicatorActions
+                variant={GitStatusIndicatorActionVariant.popover}
+                workspaceDescriptor={props.workspaceDescriptor}
+                workspaceGitStatusPromise={props.workspaceGitStatusPromise}
+                workspaceFile={props.file}
+                currentWorkspaceFile={props.isCurrentWorkspaceFile ? props.file : undefined}
+                onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
+                isOpen={keepGitStatusActionsDisplayed}
+                setOpen={setKeepGitStatusActionsDisplayed}
+              />
+            </GitStatusIndicator>
+          </FlexItem>
+        )}
       </Flex>
       <TextContent>
         <Text
@@ -86,13 +153,27 @@ export function FileListItem(props: { file: WorkspaceFile; isEditable: boolean }
   );
 }
 
-export function FileDataListItem(props: { file: WorkspaceFile; isEditable: boolean }) {
+export function FileDataListItem(props: {
+  file: WorkspaceFile;
+  displayMode: FileListItemDisplayMode;
+  workspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
+  workspaceDescriptor: WorkspaceDescriptor;
+  isCurrentWorkspaceFile?: boolean;
+  onDeletedWorkspaceFile?: () => void;
+}) {
   return (
-    <DataListItemRow>
+    <DataListItemRow disabled={props.displayMode !== FileListItemDisplayMode.enabled}>
       <DataListItemCells
         dataListCells={[
-          <DataListCell key="link" isFilled={false}>
-            <FileListItem file={props.file} isEditable={props.isEditable} />
+          <DataListCell key="link" isFilled={true}>
+            <FileListItem
+              workspaceDescriptor={props.workspaceDescriptor}
+              file={props.file}
+              displayMode={props.displayMode}
+              workspaceGitStatusPromise={props.workspaceGitStatusPromise}
+              isCurrentWorkspaceFile={props.isCurrentWorkspaceFile}
+              onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
+            />
           </DataListCell>,
         ]}
       />
@@ -100,16 +181,39 @@ export function FileDataListItem(props: { file: WorkspaceFile; isEditable: boole
   );
 }
 
-export function FileDataList(props: { file: WorkspaceFile; isEditable: boolean; style?: React.CSSProperties }) {
+export function FileDataList(props: {
+  file: WorkspaceFile;
+  workspaceDescriptor: WorkspaceDescriptor;
+  workspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
+  displayMode: FileListItemDisplayMode;
+  style?: React.CSSProperties;
+  isCurrentWorkspaceFile?: boolean;
+  onDeletedWorkspaceFile?: () => void;
+}) {
+  const fileDataListItem = (
+    <FileDataListItem
+      workspaceDescriptor={props.workspaceDescriptor}
+      key={props.file.relativePath}
+      file={props.file}
+      displayMode={props.displayMode}
+      workspaceGitStatusPromise={props.workspaceGitStatusPromise}
+      isCurrentWorkspaceFile={props.isCurrentWorkspaceFile}
+      onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
+    />
+  );
   return (
-    <DataList aria-label="file-data-list" style={props.style}>
+    <DataList
+      aria-label="file-data-list"
+      style={props.style}
+      className={switchExpression(props.displayMode, {
+        enabled: "kie-tools--file-list-item-enabled",
+        deleted: "kie-tools--file-list-item-deleted",
+        readonly: "kie-tools--file-list-item-readonly",
+      })}
+    >
       <DataListItem style={{ border: 0 }}>
-        {(!props.isEditable && (
-          <FileDataListItem key={props.file.relativePath} file={props.file} isEditable={props.isEditable} />
-        )) || (
-          <FileLink file={props.file}>
-            <FileDataListItem file={props.file} isEditable={props.isEditable} />
-          </FileLink>
+        {(props.displayMode !== FileListItemDisplayMode.enabled && fileDataListItem) || (
+          <FileLink file={props.file}>{fileDataListItem}</FileLink>
         )}
       </DataListItem>
     </DataList>
