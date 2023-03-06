@@ -503,7 +503,7 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
       }
       resolved={(workspace) => (
         <>
-          <DrawerHead>
+          <DrawerHead hasNoPadding>
             <Flex>
               <FlexItem>
                 <TextContent>
@@ -535,13 +535,6 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
                 </ResponsiveDropdown>
               </FlexItem>
             </Flex>
-            {isGitBasedWorkspaceKind(workspace.descriptor.origin.kind) && (
-              <TextContent>
-                <Text component={TextVariants.small}>
-                  <i>{workspace.descriptor.origin.url}</i>
-                </Text>
-              </TextContent>
-            )}
             <DrawerActions>
               <DrawerCloseButton onClick={props.onClose} />
             </DrawerActions>

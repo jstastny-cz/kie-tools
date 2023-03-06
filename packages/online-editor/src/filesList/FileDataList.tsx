@@ -42,6 +42,8 @@ import {
   GitStatusIndicatorActionVariant,
 } from "../workspace/components/GitStatusIndicatorActions";
 import { PromiseState } from "@kie-tools-core/react-hooks/dist/PromiseState";
+import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
+import { MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX } from "../editor/FileSwitcher";
 
 const FILE_DATA_LIST_HEIGHTS = {
   atRoot: 55 + 24,
@@ -97,16 +99,7 @@ export function FileListItem(props: {
             }
           >
             <TextContent>
-              <Text
-                component={TextVariants.p}
-                style={{
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {fileName}
-              </Text>
+              <Text component={TextVariants.p}>{fileName}</Text>
             </TextContent>
           </Tooltip>
         </FlexItem>
@@ -165,7 +158,7 @@ export function FileDataListItem(props: {
     <DataListItemRow disabled={props.displayMode !== FileListItemDisplayMode.enabled}>
       <DataListItemCells
         dataListCells={[
-          <DataListCell key="link" isFilled={true}>
+          <DataListCell key="link" isFilled={true} autoFocus={props.isCurrentWorkspaceFile}>
             <FileListItem
               workspaceDescriptor={props.workspaceDescriptor}
               file={props.file}

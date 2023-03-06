@@ -90,6 +90,8 @@ import {
 import { switchExpression } from "../switchExpression/switchExpression";
 import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceDescriptor";
 import { Checkbox } from "@patternfly/react-core/dist/js/components/Checkbox";
+import { SearchInput } from "@patternfly/react-core/dist/js/components/SearchInput";
+import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
 
 const ROOT_MENU_ID = "rootMenu";
 
@@ -302,7 +304,7 @@ export function FileSwitcher(props: {
     </>
   );
 }
-
+let ctr: number = 0;
 export function FilesMenu(props: {
   workspace: ActiveWorkspace;
   workspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
@@ -321,7 +323,7 @@ export function FilesMenu(props: {
   const [filesMenuMode, setFilesMenuMode] = useState(FilesMenuMode.LIST);
   useEffect(() => {
     setMenuHeights({});
-  }, [props.workspace, filesMenuMode, activeMenu]);
+  }, [props.workspace, filesMenuMode]);
 
   const drillIn = useCallback((_event, fromMenuId, toMenuId, pathId) => {
     setMenuDrilledIn((prev) => [...prev, fromMenuId]);
@@ -337,6 +339,7 @@ export function FilesMenu(props: {
 
   const setHeight = useCallback((menuId: string, height: number) => {
     setMenuHeights((prev) => {
+      console.warn(`${++ctr}`);
       if (prev[menuId] === undefined || (menuId !== ROOT_MENU_ID && prev[menuId] !== height)) {
         return { ...prev, [menuId]: height };
       }
@@ -377,6 +380,7 @@ export function FilesMenu(props: {
       onDrillOut={drillOut}
       onGetMenuHeight={setHeight}
       className={"kie-sandbox--files-menu"}
+      isScrollable
     >
       <MenuContent
         // MAGIC NUMBER ALERT
@@ -560,7 +564,6 @@ export function FileSvg(props: { workspaceFile: WorkspaceFile }) {
 export function SearchableFilesMenuGroup(props: {
   shouldFocusOnSearch: boolean;
   filesMenuMode: FilesMenuMode;
-  label: string;
   allFiles: WorkspaceFile[];
   search: string;
   setSearch: React.Dispatch<React.SetStateAction<string>>;
@@ -569,19 +572,6 @@ export function SearchableFilesMenuGroup(props: {
   setSelectedGitSyncStatusFilter?: (selection?: WorkspaceGitLocalChangesStatus) => void;
   isNoHeightMaxLimit?: boolean;
 }) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (props.shouldFocusOnSearch) {
-      const task = setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 500);
-      return () => {
-        clearTimeout(task);
-      };
-    }
-  }, [props.shouldFocusOnSearch, props.filesMenuMode]);
-
   const filteredFiles = useMemo(
     () => props.allFiles.filter((file) => file.name.toLowerCase().includes(props.search.toLowerCase())),
     [props.allFiles, props.search]
@@ -600,7 +590,9 @@ export function SearchableFilesMenuGroup(props: {
       // 440px is the exact number that allows the menu to grow to the end of the screen without adding scroll  to the
       // entire page, It includes the first menu item, the search bar and the "View other files" button at the bottom.
       if (props.isNoHeightMaxLimit) {
-        return props.allFiles.length ? `${sizeOfFirst50Elements}px` : "172px";
+        return props.allFiles.length
+          ? `${filteredFiles.reduce((sum, current) => sum + getFileDataListHeight(current), 5)}px`
+          : "172px";
       }
       return `max(300px, min(calc(100vh - 440px), ${sizeOfFirst50Elements}px))`;
     } else if (props.filesMenuMode === FilesMenuMode.CAROUSEL) {
@@ -617,46 +609,11 @@ export function SearchableFilesMenuGroup(props: {
     } else {
       return "";
     }
-  }, [props.allFiles, props.filesMenuMode, props.isNoHeightMaxLimit]);
+  }, [filteredFiles, props.allFiles, props.filesMenuMode, props.isNoHeightMaxLimit]);
 
   return (
-    <MenuGroup
-      label={
-        <Flex direction={{ default: "row" }} className={"kie-sandbox--files-menu--label"}>
-          <FlexItem align={{ default: "alignLeft" }}>
-            <Title headingLevel={"h6"}>{props.label}</Title>
-          </FlexItem>
-          {props.setSelectedGitSyncStatusFilter && (
-            <FlexItem align={{ default: "alignRight" }} alignSelf={{ default: "alignSelfCenter" }}>
-              <Tooltip content={"Filter only modified files"} position={"bottom"}>
-                <Checkbox
-                  label={"Show changed files"}
-                  id={"filter-git-status-changed-locally"}
-                  aria-label={"Select to display only modified files"}
-                  isChecked={props.selectedGitSyncStatusFilter === WorkspaceGitLocalChangesStatus.pending}
-                  onChange={(checked) => {
-                    props.setSelectedGitSyncStatusFilter?.(
-                      checked ? WorkspaceGitLocalChangesStatus.pending : undefined
-                    );
-                  }}
-                />
-              </Tooltip>
-            </FlexItem>
-          )}
-        </Flex>
-      }
-    >
+    <MenuGroup>
       {/* Allows for arrows to work when editing the text. */}
-      <MenuInput onKeyDown={(e) => e.stopPropagation()}>
-        <TextInput
-          ref={searchInputRef}
-          value={props.search}
-          aria-label={"Other files menu items"}
-          iconVariant={"search"}
-          type={"search"}
-          onChange={props.setSearch}
-        />
-      </MenuInput>
       <div style={{ overflowY: "auto", height }}>
         {filteredFiles.length > 0 && props.children({ filteredFiles })}
         {filteredFiles.length <= 0 && (
@@ -690,6 +647,8 @@ export function FilesMenuItems(props: {
   const routes = useRoutes();
   const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const [filteredGitSyncStatus, setFilteredGitSyncStatus] = useState<WorkspaceGitLocalChangesStatus>();
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const deletedWorkspaceFiles = useMemo(() => {
     if (!props.currentWorkspaceGitStatusPromise) {
@@ -747,7 +706,7 @@ export function FilesMenuItems(props: {
     file: WorkspaceFile;
     workspaceDescriptor: WorkspaceDescriptor;
     workspaceGitStatus?: PromiseState<WorkspaceGitStatusType>;
-    isCurrentWorkspaceFile?: (file: WorkspaceFile) => boolean;
+    isCurrentWorkspaceFile?: boolean;
     onDeletedWorkspaceFile?: () => void;
     displayMode: FileListItemDisplayMode;
     onSelectFile: () => void;
@@ -760,7 +719,7 @@ export function FilesMenuItems(props: {
             displayMode={props.displayMode}
             workspaceDescriptor={props.workspaceDescriptor}
             workspaceGitStatusPromise={props.workspaceGitStatus}
-            isCurrentWorkspaceFile={isCurrentWorkspaceFile(props.file)}
+            isCurrentWorkspaceFile={props.isCurrentWorkspaceFile}
             onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
           />
         </CardHeaderMain>
@@ -784,11 +743,13 @@ export function FilesMenuItems(props: {
           readonly: "kie-tools--file-list-item-readonly",
         })}
       >
-        {props.displayMode === FileListItemDisplayMode.enabled ? (
-          <FileLink file={props.file}>{cardInternals}</FileLink>
-        ) : (
-          cardInternals
-        )}
+        <div id={`scrollRef-${props.file}`} ref={props.isCurrentWorkspaceFile ? scrollRef : undefined}>
+          {props.displayMode === FileListItemDisplayMode.enabled ? (
+            <FileLink file={props.file}>{cardInternals}</FileLink>
+          ) : (
+            cardInternals
+          )}
+        </div>
       </Card>
     );
   };
@@ -798,21 +759,78 @@ export function FilesMenuItems(props: {
       ? FileListItemDisplayMode.deleted
       : FileListItemDisplayMode.enabled;
 
+  const countScrollOffset = useCallback(
+    (files: WorkspaceFile[]) => {
+      const item = files.find((it) => it.relativePath === props.currentWorkspaceFile?.relativePath);
+      return (
+        props.currentWorkspaceFile &&
+        item &&
+        files.slice(0, files.indexOf(item)).reduce((sum, current) => sum + getFileDataListHeight(current), 0)
+      );
+    },
+    [props.currentWorkspaceFile]
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const task = setTimeout(() => {
+      if (props.shouldFocusOnSearch) {
+        searchInputRef.current?.focus();
+      }
+      if (props.filesMenuMode === FilesMenuMode.CAROUSEL) {
+        scrollRef.current?.scrollIntoView();
+      }
+    }, 500);
+    return () => {
+      clearTimeout(task);
+    };
+  }, [props.shouldFocusOnSearch, props.filesMenuMode]);
+
   return (
     <>
-      <Split>
-        <SplitItem isFilled={true}>
-          {!props.hideNavigationToAllWorkspaces && (
-            <MenuItem direction="up" itemId={props.workspace.descriptor.workspaceId}>
-              All
-            </MenuItem>
-          )}
-        </SplitItem>
-        <SplitItem>
-          <FilesMenuModeIcons filesMenuMode={props.filesMenuMode} setFilesMenuMode={props.setFilesMenuMode} />
-          &nbsp; &nbsp;
-        </SplitItem>
-      </Split>
+      <Flex direction={{ default: "column" }} spacer={{ default: "spacerNone" }}>
+        {!props.hideNavigationToAllWorkspaces && (
+          <MenuItem direction="up" itemId={props.workspace.descriptor.workspaceId}>
+            All
+          </MenuItem>
+        )}
+        <FlexItem align={{ default: "alignLeft" }}>
+          <MenuInput onKeyDown={(e) => e.stopPropagation()}>
+            <SearchInput
+              ref={searchInputRef}
+              value={search}
+              type={"search"}
+              onChange={(_ev, value) => {
+                setSearch(value);
+              }}
+              placeholder={`In '${props.workspace.descriptor.name}'`}
+              // expandableInput={{isExpanded, onToggleExpand, toggleAriaLabel: 'Search files'}}
+              style={{ fontSize: "small", lineHeight: "" }}
+              onClick={(ev) => {
+                ev.stopPropagation();
+              }}
+            />
+          </MenuInput>
+        </FlexItem>
+        <Flex direction={{ default: "row" }} alignItems={{ default: "alignItemsCenter" }}>
+          <Flex align={{ default: "alignRight" }}>
+            <Tooltip content={"Filter only modified files"} position={"bottom"}>
+              <Checkbox
+                label={<Truncate content={"Only changed"} />}
+                id={"filter-git-status-changed-locally"}
+                aria-label={"Select to display only modified files"}
+                isChecked={filteredGitSyncStatus === WorkspaceGitLocalChangesStatus.pending}
+                onChange={(checked) => {
+                  setFilteredGitSyncStatus(checked ? WorkspaceGitLocalChangesStatus.pending : undefined);
+                }}
+              />
+            </Tooltip>
+          </Flex>
+          <FlexItem>
+            <FilesMenuModeIcons filesMenuMode={props.filesMenuMode} setFilesMenuMode={props.setFilesMenuMode} />
+          </FlexItem>
+        </Flex>
+      </Flex>
       <Divider component={"li"} />
 
       {props.filesMenuMode === FilesMenuMode.LIST && (
@@ -822,7 +840,6 @@ export function FilesMenuItems(props: {
             setSearch={setSearch}
             filesMenuMode={props.filesMenuMode}
             shouldFocusOnSearch={props.shouldFocusOnSearch}
-            label={`Models in '${props.workspace.descriptor.name}'`}
             allFiles={models}
             selectedGitSyncStatusFilter={filteredGitSyncStatus}
             setSelectedGitSyncStatusFilter={
@@ -840,6 +857,7 @@ export function FilesMenuItems(props: {
                     itemCount={filteredFiles.length}
                     itemSize={(index) => getFileDataListHeight(filteredFiles[index])}
                     width={width}
+                    initialScrollOffset={countScrollOffset(filteredFiles)}
                   >
                     {({ index, style }) => (
                       <MenuItem
@@ -847,6 +865,8 @@ export function FilesMenuItems(props: {
                         onClick={props.onSelectFile}
                         component={"div"}
                         className={"kie-tools--file-switcher-no-padding-menu-item"}
+                        isFocused={isCurrentWorkspaceFile(filteredFiles[index])}
+                        isActive={isCurrentWorkspaceFile(filteredFiles[index])}
                       >
                         <FileDataList
                           file={filteredFiles[index]}
@@ -873,7 +893,6 @@ export function FilesMenuItems(props: {
           setSearch={setSearch}
           filesMenuMode={props.filesMenuMode}
           shouldFocusOnSearch={props.shouldFocusOnSearch}
-          label={`Models in '${props.workspace.descriptor.name}'`}
           allFiles={models}
           selectedGitSyncStatusFilter={filteredGitSyncStatus}
           setSelectedGitSyncStatusFilter={
@@ -897,7 +916,7 @@ export function FilesMenuItems(props: {
                   file={file}
                   workspaceDescriptor={props.workspace.descriptor}
                   workspaceGitStatus={props.currentWorkspaceGitStatusPromise}
-                  isCurrentWorkspaceFile={isCurrentWorkspaceFile}
+                  isCurrentWorkspaceFile={isCurrentWorkspaceFile(file)}
                   displayMode={getFileListItemMode(file)}
                   onSelectFile={props.onSelectFile}
                   onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
@@ -925,11 +944,10 @@ export function FilesMenuItems(props: {
             drilldownMenu={
               <DrilldownMenu id={`dd-other-${props.workspace.descriptor.workspaceId}`}>
                 <SearchableFilesMenuGroup
-                  search={otherFilesSearch}
-                  setSearch={setOtherFilesSearch}
+                  search={search}
+                  setSearch={setSearch}
                   filesMenuMode={FilesMenuMode.LIST} // always LIST, even for mode CAROUSEL
                   shouldFocusOnSearch={false}
-                  label={`Other files in '${props.workspace.descriptor.name}'`}
                   allFiles={otherFiles}
                   isNoHeightMaxLimit={props.isNoHeightMaxLimit}
                 >
@@ -954,7 +972,6 @@ export function FilesMenuItems(props: {
                                 displayMode={FileListItemDisplayMode.readonly}
                                 workspaceGitStatusPromise={props.currentWorkspaceGitStatusPromise}
                                 workspaceDescriptor={props.workspace.descriptor}
-                                isCurrentWorkspaceFile={isCurrentWorkspaceFile(filteredFiles[index])}
                                 onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
                               />
                             </MenuItem>

@@ -43,6 +43,9 @@ import { WarningTriangleIcon } from "@patternfly/react-icons/dist/js/icons/warni
 import * as React from "react";
 import { useOnlineI18n } from "../../i18n";
 import { switchExpression } from "../../switchExpression/switchExpression";
+import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
+import { Text, TextVariants } from "@patternfly/react-core/dist/js/components/Text";
+import { TooltipPosition } from "@patternfly/react-core/dist/js/components/Tooltip";
 
 type Directions = "up" | "down" | "right" | "left";
 
@@ -166,7 +169,16 @@ export const GitStatusIndicatorActions = (props: GitStatusIndicatorActionsProps)
           <span>{i18n.gitStatusIndicatorActions[id].description}</span>
           <List>
             {filepaths.map((it, index) => (
-              <ListItem key={id + index}>{it}</ListItem>
+              <ListItem key={id + index}>
+                <Text component={TextVariants.small}>
+                  <Truncate
+                    content={it}
+                    position={"middle"}
+                    trailingNumChars={Math.max(it.length - it.lastIndexOf("/"), 10)}
+                    tooltipPosition={TooltipPosition.leftStart}
+                  />
+                </Text>
+              </ListItem>
             ))}
           </List>
         </>
@@ -351,6 +363,7 @@ const ActionsPopover = (props: {
 }) => {
   return (
     <Popover
+      id={`actions-popover-${props.titleText.replace(/\s/g, "_")}`}
       bodyContent={
         <ActionsAlert
           titleText={props.titleText}
@@ -366,6 +379,7 @@ const ActionsPopover = (props: {
       isVisible={props.isOpen}
     >
       <Button
+        className={"kie-tools--masthead-hoverable"}
         variant={"plain"}
         onClick={(ev) => {
           props.setOpen(!props.isOpen);

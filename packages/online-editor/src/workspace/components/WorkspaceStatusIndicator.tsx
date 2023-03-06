@@ -32,7 +32,6 @@ import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/work
 import { WorkspaceFile } from "@kie-tools-core/workspaces-git-fs/dist/context/WorkspacesContext";
 import { switchExpression } from "../../switchExpression/switchExpression";
 import { Flex, FlexItem } from "@patternfly/react-core/dist/js/layouts/Flex";
-import { Divider } from "@patternfly/react-core/dist/js/components/Divider";
 import { GitStatusIndicatorActions, GitStatusIndicatorActionVariant } from "./GitStatusIndicatorActions";
 import { FileStageStatus } from "@kie-tools-core/workspaces-git-fs/dist/services/GitService";
 import { PromiseState } from "@kie-tools-core/react-hooks/dist/PromiseState";
@@ -57,29 +56,28 @@ export function GitStatusIndicator(props: {
     });
   }, [prev, props]);
 
-  const indicatorTooltips = React.useMemo(() => {
+  const indicatorTooltip = React.useMemo(() => {
     if (!props.workspaceGitStatusPromise?.data?.hasLocalChanges) {
       return [];
     }
-    const tooltips: JSX.Element[] = [];
 
     const tooltipForStageStatus = (stageStatus?: FileStageStatus) => {
       const modifiedTooltip = (
-        <Tooltip content={"Modified file in the Workspace."} position={"bottom"}>
+        <Tooltip content={"Modified."} position={"bottom"}>
           <small>
             <i>M</i>
           </small>
         </Tooltip>
       );
       const deletedTooltip = (
-        <Tooltip content={"Deleted file from the Workspace."} position={"bottom"}>
+        <Tooltip content={"Deleted file."} position={"bottom"}>
           <small>
             <i>D</i>
           </small>
         </Tooltip>
       );
       const addedTooltip = (
-        <Tooltip content={"New file added into the Workspace."} position={"bottom"}>
+        <Tooltip content={"New file."} position={"bottom"}>
           <small>
             <i>A</i>
           </small>
@@ -92,22 +90,13 @@ export function GitStatusIndicator(props: {
         default: <></>,
       });
     };
-    if (props.workspaceFile) {
-      tooltips.push(
-        tooltipForStageStatus(
+    return props.workspaceFile
+      ? tooltipForStageStatus(
           props.workspaceGitStatusPromise?.data.fileStageStatuses.find(
             ({ path }) => path === props.workspaceFile?.relativePath
           )?.status
         )
-      );
-    } else {
-      tooltips.push(
-        ...new Set(
-          props.workspaceGitStatusPromise?.data.fileStageStatuses.map(({ status }) => tooltipForStageStatus(status))
-        )
-      );
-    }
-    return tooltips;
+      : tooltipForStageStatus(FileStageStatus.modified);
   }, [props.workspaceGitStatusPromise, props.workspaceFile]);
 
   return (
@@ -161,18 +150,7 @@ export function GitStatusIndicator(props: {
             <FlexItem>
               <Title headingLevel={"h6"} style={{ display: "inline", cursor: "default" }}>
                 <Flex spaceItems={{ default: "spaceItemsXs" }} direction={{ default: "row" }}>
-                  {indicatorTooltips.map((tooltip, index) => (
-                    <>
-                      {index > 0 && (
-                        <Divider
-                          orientation={{ default: "vertical" }}
-                          key={`divider-${index}`}
-                          inset={{ default: "insetSm" }}
-                        />
-                      )}
-                      <FlexItem key={index}>{tooltip}</FlexItem>
-                    </>
-                  ))}
+                  {indicatorTooltip}
                 </Flex>
               </Title>
             </FlexItem>
