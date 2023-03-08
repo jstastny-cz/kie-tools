@@ -684,12 +684,8 @@ section.kie-tools--settings-tab {
   min-width: 0;
 }
 
-.kie-sandbox--files-menu.pf-c-menu.pf-m-scrollable {
-  --pf-c-menu__content--MaxHeight: none;
-}
-
-.kie-sandbox--files-menu .pf-c-menu__list-item {
-  position: static;
+.kie-sandbox--files-menu {
+  overflow: hidden;
 }
 
 .kie-sandbox--files-menu .kie-sandbox--files-menu--label {
@@ -713,8 +709,6 @@ section.kie-tools--settings-tab {
 
 /* GitStatusIndicator, GitStatusIndicatorActions: begin */
 .kie-tools--git-status-indicator button {
-  /* padding-top: 3px;
-  padding-bottom: 3px; */
   margin-top: -4px;
   margin-bottom: -4px;
 }

@@ -230,9 +230,13 @@ export function FileLink(props: React.PropsWithChildren<{ file: WorkspaceFile; s
   );
 }
 
-export function SingleFileWorkspaceDataList(props: { workspaceDescriptor: WorkspaceDescriptor; file: WorkspaceFile }) {
+export function SingleFileWorkspaceDataList(props: {
+  workspaceDescriptor: WorkspaceDescriptor;
+  file: WorkspaceFile;
+  style?: React.CSSProperties;
+}) {
   return (
-    <DataList aria-label="file-data-list">
+    <DataList aria-label="file-data-list" style={props.style}>
       <DataListItem style={{ border: 0 }}>
         <FileLink file={props.file}>
           <DataListItemRow>

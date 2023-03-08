@@ -50,7 +50,6 @@ import {
   PromiseStateWrapper,
   useCombinedPromiseState,
 } from "@kie-tools-core/react-hooks/dist/PromiseState";
-import { Split, SplitItem } from "@patternfly/react-core/dist/js/layouts/Split";
 import { Button } from "@patternfly/react-core/dist/js/components/Button";
 import { useWorkspacesFilesPromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspacesFiles";
 import { Skeleton } from "@patternfly/react-core/dist/js/components/Skeleton";
@@ -91,7 +90,7 @@ import { switchExpression } from "../switchExpression/switchExpression";
 import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceDescriptor";
 import { Checkbox } from "@patternfly/react-core/dist/js/components/Checkbox";
 import { SearchInput } from "@patternfly/react-core/dist/js/components/SearchInput";
-import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
+import { Grid, GridItem } from "@patternfly/react-core/dist/js/layouts/Grid";
 
 const ROOT_MENU_ID = "rootMenu";
 
@@ -304,7 +303,11 @@ export function FileSwitcher(props: {
     </>
   );
 }
-let ctr: number = 0;
+
+export const getWorkspacesDataListSize = (workspaceFilesCount?: number) => {
+  return workspaceFilesCount ? (workspaceFilesCount > 1 ? 152 : 102) : 0;
+};
+
 export function FilesMenu(props: {
   workspace: ActiveWorkspace;
   workspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
@@ -312,13 +315,15 @@ export function FilesMenu(props: {
   onDeletedWorkspaceFile?: () => void;
   isMenuOpen: boolean;
   setMenuOpen?: (isOpen: boolean) => void;
-  isNoHeightMaxLimit?: boolean;
+  replaceNavigationToAllWorkspaces?: JSX.Element;
 }) {
+  const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const [menuDrilledIn, setMenuDrilledIn] = useState<string[]>([ROOT_MENU_ID]);
   const [drilldownPath, setDrilldownPath] = useState<string[]>([props.workspace.descriptor.workspaceId]);
   const [menuHeights, setMenuHeights] = useState<{ [key: string]: number }>({});
 
   const [activeMenu, setActiveMenu] = useState(`dd${props.workspace.descriptor.workspaceId}`);
+  const [isLoadAllWorkspaces, setLoadAllWorskpaces] = useState(false);
 
   const [filesMenuMode, setFilesMenuMode] = useState(FilesMenuMode.LIST);
   useEffect(() => {
@@ -335,35 +340,104 @@ export function FilesMenu(props: {
     setMenuDrilledIn((prev) => prev.slice(0, prev.length - 1));
     setDrilldownPath((prev) => prev.slice(0, prev.length - 1));
     setActiveMenu(toMenuId);
+    if (toMenuId === ROOT_MENU_ID) {
+      setLoadAllWorskpaces(true);
+    }
   }, []);
 
   const setHeight = useCallback((menuId: string, height: number) => {
     setMenuHeights((prev) => {
-      console.warn(`${++ctr}`);
       if (prev[menuId] === undefined || (menuId !== ROOT_MENU_ID && prev[menuId] !== height)) {
         return { ...prev, [menuId]: height };
       }
       return prev;
     });
   }, []);
+
   const workspacesMenuItems = useMemo(() => {
-    if (activeMenu === `dd${props.workspace.descriptor.workspaceId}`) {
+    if (!isLoadAllWorkspaces) {
       return <></>;
     }
-
     return (
-      <WorkspacesMenuItems
-        activeMenu={activeMenu}
-        currentWorkspace={props.workspace}
-        onSelectFile={() => props.setMenuOpen?.(false)}
-        filesMenuMode={filesMenuMode}
-        setFilesMenuMode={setFilesMenuMode}
-        currentWorkspaceGitStatusPromise={props.workspaceGitStatusPromise}
-        onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
-        isNoHeightMaxLimit={props.isNoHeightMaxLimit}
-      />
+      <WorkspacesMenuItems currentWorkspace={props.workspace}>
+        {({ filteredWorkspaces }) => {
+          return (
+            <AutoSizer>
+              {({ height, width }) => {
+                return (
+                  <VariableSizeList
+                    height={height}
+                    itemCount={filteredWorkspaces.length}
+                    itemSize={(index) => getWorkspacesDataListSize(filteredWorkspaces[index].files.length)}
+                    width={width}
+                  >
+                    {({ index, style }) => (
+                      <>
+                        {filteredWorkspaces[index].files.length === 1 && (
+                          <MenuItem className={"kie-tools--file-switcher-no-padding-menu-item"} style={style}>
+                            <SingleFileWorkspaceDataList
+                              workspaceDescriptor={filteredWorkspaces[index].descriptor}
+                              file={filteredWorkspaces[index].files![0]}
+                            />
+                          </MenuItem>
+                        )}
+                        {filteredWorkspaces[index].files.length > 1 && (
+                          <MenuItem
+                            style={{
+                              ...style,
+                              borderTop: "var(--pf-global--BorderWidth--sm) solid var(--pf-global--BorderColor--100)",
+                            }}
+                            className={"kie-tools--file-switcher-no-padding-menu-item"}
+                            itemId={filteredWorkspaces[index].descriptor.workspaceId}
+                            direction={"down"}
+                            drilldownMenu={() => (
+                              <DrilldownMenu id={`dd${filteredWorkspaces[index].descriptor.workspaceId}`}>
+                                <FilesMenuItems
+                                  filesMenuMode={filesMenuMode}
+                                  setFilesMenuMode={setFilesMenuMode}
+                                  workspace={filteredWorkspaces[index]}
+                                  onSelectFile={() => props.setMenuOpen?.(false)}
+                                  onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
+                                  // not passing currentWorkspaceGitStatusPromise property as this is not a current workspace.
+                                />
+                                {/* <MenuItem itemId={"fake"} direction={"up"}component={"div"}>FAke</MenuItem> */}
+                              </DrilldownMenu>
+                            )}
+                          >
+                            <DataList aria-label="workspace-data-list" style={{ border: 0 }}>
+                              {/* Need to replicate DatList's border here because of the angle bracket of drilldown menus */}
+                              <DataListItem style={{ border: 0, backgroundColor: "transparent" }}>
+                                <DataListItemRow>
+                                  <DataListItemCells
+                                    dataListCells={[
+                                      <DataListCell key="link" isFilled={false}>
+                                        <WorkspaceListItem
+                                          isBig={false}
+                                          workspaceDescriptor={filteredWorkspaces[index].descriptor}
+                                          allFiles={filteredWorkspaces[index].files}
+                                          editableFiles={filteredWorkspaces[index].files.filter((f) =>
+                                            editorEnvelopeLocator.hasMappingFor(f.relativePath)
+                                          )}
+                                        />
+                                      </DataListCell>,
+                                    ]}
+                                  />
+                                </DataListItemRow>
+                              </DataListItem>
+                            </DataList>
+                          </MenuItem>
+                        )}
+                      </>
+                    )}
+                  </VariableSizeList>
+                );
+              }}
+            </AutoSizer>
+          );
+        }}
+      </WorkspacesMenuItems>
     );
-  }, [activeMenu, filesMenuMode, props]);
+  }, [editorEnvelopeLocator, filesMenuMode, isLoadAllWorkspaces, props]);
 
   return (
     <Menu
@@ -380,16 +454,15 @@ export function FilesMenu(props: {
       onDrillOut={drillOut}
       onGetMenuHeight={setHeight}
       className={"kie-sandbox--files-menu"}
-      isScrollable
     >
       <MenuContent
         // MAGIC NUMBER ALERT
         //
         // 204px is the exact number that allows the menu to grow to
         // the maximum size of the screen without adding scroll to the page.
-        maxMenuHeight={!props.isNoHeightMaxLimit ? `calc(100vh - 204px)` : undefined}
+        maxMenuHeight={"calc(100vh - 204px)"}
         menuHeight={activeMenu === ROOT_MENU_ID ? undefined : `${menuHeights[activeMenu]}px`}
-        style={{ overflow: "hidden" }}
+        // style={{ overflow: "hidden" }}
       >
         <MenuList style={{ padding: 0 }}>
           <MenuItem
@@ -398,7 +471,6 @@ export function FilesMenu(props: {
             drilldownMenu={
               <DrilldownMenu id={`dd${props.workspace.descriptor.workspaceId}`}>
                 <FilesMenuItems
-                  shouldFocusOnSearch={activeMenu === `dd${props.workspace.descriptor.workspaceId}`}
                   filesMenuMode={filesMenuMode}
                   setFilesMenuMode={setFilesMenuMode}
                   workspace={props.workspace}
@@ -406,8 +478,7 @@ export function FilesMenu(props: {
                   onSelectFile={() => props.setMenuOpen?.(false)}
                   currentWorkspaceGitStatusPromise={props.workspaceGitStatusPromise}
                   onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
-                  hideNavigationToAllWorkspaces={!props.workspaceFile}
-                  isNoHeightMaxLimit={props.isNoHeightMaxLimit}
+                  replaceNavigationToAllWorkspaces={props.replaceNavigationToAllWorkspaces}
                 />
               </DrilldownMenu>
             }
@@ -422,16 +493,11 @@ export function FilesMenu(props: {
 }
 
 export function WorkspacesMenuItems(props: {
-  activeMenu: string;
   currentWorkspace: ActiveWorkspace;
-  onSelectFile: () => void;
-  filesMenuMode: FilesMenuMode;
-  setFilesMenuMode: React.Dispatch<React.SetStateAction<FilesMenuMode>>;
-  currentWorkspaceGitStatusPromise?: PromiseState<WorkspaceGitStatusType>;
-  onDeletedWorkspaceFile?: () => void;
-  isNoHeightMaxLimit?: boolean;
+  children: (args: {
+    filteredWorkspaces: { descriptor: WorkspaceDescriptor; files: WorkspaceFile[] }[];
+  }) => React.ReactNode;
 }) {
-  const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const workspaceDescriptorsPromise = useWorkspaceDescriptorsPromise();
   const workspaceFilesPromise = useWorkspacesFilesPromise(workspaceDescriptorsPromise.data);
   const combined = useCombinedPromiseState({
@@ -440,85 +506,50 @@ export function WorkspacesMenuItems(props: {
   });
 
   return (
-    <>
-      <Divider component={"li"} />
-      <PromiseStateWrapper
-        promise={combined}
-        pending={
-          <>
-            <WorkspaceLoadingMenuItem />
-            <WorkspaceLoadingMenuItem />
-            <WorkspaceLoadingMenuItem />
-            <WorkspaceLoadingMenuItem />
-          </>
-        }
-        resolved={({ workspaceDescriptors, workspaceFiles }) => (
-          <>
-            {workspaceDescriptors
-              .sort((a, b) => (new Date(a.lastUpdatedDateISO) < new Date(b.lastUpdatedDateISO) ? 1 : -1))
-              .filter((descriptor) => descriptor.workspaceId !== props.currentWorkspace.descriptor.workspaceId)
-              .map((descriptor) => (
-                <React.Fragment key={descriptor.workspaceId}>
-                  {workspaceFiles.get(descriptor.workspaceId)!.length === 1 && (
-                    <MenuItem onClick={props.onSelectFile} className={"kie-tools--file-switcher-no-padding-menu-item"}>
-                      <SingleFileWorkspaceDataList
-                        workspaceDescriptor={descriptor}
-                        file={workspaceFiles.get(descriptor.workspaceId)![0]}
-                      />
-                    </MenuItem>
-                  )}
-                  {workspaceFiles.get(descriptor.workspaceId)!.length > 1 && (
-                    <MenuItem
-                      style={{
-                        borderTop: "var(--pf-global--BorderWidth--sm) solid var(--pf-global--BorderColor--100)",
-                      }}
-                      className={"kie-tools--file-switcher-no-padding-menu-item"}
-                      itemId={descriptor.workspaceId}
-                      direction={"down"}
-                      drilldownMenu={
-                        <DrilldownMenu id={`dd${descriptor.workspaceId}`}>
-                          <FilesMenuItems
-                            shouldFocusOnSearch={props.activeMenu === `dd${descriptor.workspaceId}`}
-                            filesMenuMode={props.filesMenuMode}
-                            setFilesMenuMode={props.setFilesMenuMode}
-                            workspace={{ descriptor, files: workspaceFiles.get(descriptor.workspaceId) ?? [] }}
-                            onSelectFile={props.onSelectFile}
-                            onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
-                            isNoHeightMaxLimit={props.isNoHeightMaxLimit}
-                            // not passing currentWorkspaceGitStatusPromise property as this is not a current workspace.
-                          />
-                        </DrilldownMenu>
-                      }
-                    >
-                      <DataList aria-label="workspace-data-list" style={{ border: 0 }}>
-                        {/* Need to replicate DatList's border here because of the angle bracket of drilldown menus */}
-                        <DataListItem style={{ border: 0, backgroundColor: "transparent" }}>
-                          <DataListItemRow>
-                            <DataListItemCells
-                              dataListCells={[
-                                <DataListCell key="link" isFilled={false}>
-                                  <WorkspaceListItem
-                                    isBig={false}
-                                    workspaceDescriptor={descriptor}
-                                    allFiles={workspaceFiles.get(descriptor.workspaceId)!}
-                                    editableFiles={workspaceFiles
-                                      .get(descriptor.workspaceId)!
-                                      .filter((f) => editorEnvelopeLocator.hasMappingFor(f.relativePath))}
-                                  />
-                                </DataListCell>,
-                              ]}
-                            />
-                          </DataListItemRow>
-                        </DataListItem>
-                      </DataList>
-                    </MenuItem>
-                  )}
-                </React.Fragment>
-              ))}
-          </>
-        )}
-      />
-    </>
+    <PromiseStateWrapper
+      promise={combined}
+      pending={
+        <>
+          <WorkspaceLoadingMenuItem />
+          <WorkspaceLoadingMenuItem />
+          <WorkspaceLoadingMenuItem />
+          <WorkspaceLoadingMenuItem />
+        </>
+      }
+      resolved={({ workspaceDescriptors, workspaceFiles }) => {
+        const filteredWorkspaces = workspaceDescriptors
+          .sort((a, b) => (new Date(a.lastUpdatedDateISO) < new Date(b.lastUpdatedDateISO) ? 1 : -1))
+          .filter((descriptor) => descriptor.workspaceId !== props.currentWorkspace.descriptor.workspaceId)
+          .map((it) => ({ descriptor: it, files: workspaceFiles.get(it.workspaceId) ?? [] }));
+
+        return (
+          <MenuGroup>
+            {/* Allows for arrows to work when editing the text. */}
+            <div
+              style={{
+                overflowY: "auto",
+                height: `min(calc(100vh - 244px),${filteredWorkspaces.reduce(
+                  (sum, current) => sum + getWorkspacesDataListSize(current.files.length),
+                  0
+                )}px)`,
+              }}
+            >
+              {workspaceDescriptors.length > 0 && props.children({ filteredWorkspaces })}
+              {workspaceDescriptors.length <= 0 && (
+                <Bullseye>
+                  <EmptyState>
+                    <EmptyStateIcon icon={CubesIcon} />
+                    <Title headingLevel="h4" size="lg">
+                      {"Nothing here."}
+                    </Title>
+                  </EmptyState>
+                </Bullseye>
+              )}
+            </div>
+          </MenuGroup>
+        );
+      }}
+    />
   );
 }
 
@@ -562,21 +593,13 @@ export function FileSvg(props: { workspaceFile: WorkspaceFile }) {
 }
 
 export function SearchableFilesMenuGroup(props: {
-  shouldFocusOnSearch: boolean;
   filesMenuMode: FilesMenuMode;
   allFiles: WorkspaceFile[];
+  filteredFiles: WorkspaceFile[];
   search: string;
-  setSearch: React.Dispatch<React.SetStateAction<string>>;
   children: (args: { filteredFiles: WorkspaceFile[] }) => React.ReactNode;
-  selectedGitSyncStatusFilter?: WorkspaceGitLocalChangesStatus;
-  setSelectedGitSyncStatusFilter?: (selection?: WorkspaceGitLocalChangesStatus) => void;
-  isNoHeightMaxLimit?: boolean;
+  style?: React.CSSProperties;
 }) {
-  const filteredFiles = useMemo(
-    () => props.allFiles.filter((file) => file.name.toLowerCase().includes(props.search.toLowerCase())),
-    [props.allFiles, props.search]
-  );
-
   const height = useMemo(() => {
     if (props.filesMenuMode === FilesMenuMode.LIST) {
       // No reason to know the exact size.
@@ -589,11 +612,6 @@ export function SearchableFilesMenuGroup(props: {
       //
       // 440px is the exact number that allows the menu to grow to the end of the screen without adding scroll  to the
       // entire page, It includes the first menu item, the search bar and the "View other files" button at the bottom.
-      if (props.isNoHeightMaxLimit) {
-        return props.allFiles.length
-          ? `${filteredFiles.reduce((sum, current) => sum + getFileDataListHeight(current), 5)}px`
-          : "172px";
-      }
       return `max(300px, min(calc(100vh - 440px), ${sizeOfFirst50Elements}px))`;
     } else if (props.filesMenuMode === FilesMenuMode.CAROUSEL) {
       // MAGIC NUMBER ALERT
@@ -602,21 +620,18 @@ export function SearchableFilesMenuGroup(props: {
       // entire page, It includes the first menu item, the search bar and the "View other files" button at the bottom.
       //
       // 280px is the size of a File SVG card.
-      if (props.isNoHeightMaxLimit) {
-        return "auto";
-      }
       return `min(calc(100vh - 440px), calc(${props.allFiles.length} * 280px))`;
     } else {
       return "";
     }
-  }, [filteredFiles, props.allFiles, props.filesMenuMode, props.isNoHeightMaxLimit]);
+  }, [props.allFiles, props.filesMenuMode]);
 
   return (
     <MenuGroup>
       {/* Allows for arrows to work when editing the text. */}
-      <div style={{ overflowY: "auto", height }}>
-        {filteredFiles.length > 0 && props.children({ filteredFiles })}
-        {filteredFiles.length <= 0 && (
+      <div style={{ ...props.style, height }}>
+        {props.filteredFiles.length > 0 && props.children({ filteredFiles: props.filteredFiles })}
+        {props.filteredFiles.length <= 0 && (
           <Bullseye>
             <EmptyState>
               <EmptyStateIcon icon={CubesIcon} />
@@ -639,16 +654,16 @@ export function FilesMenuItems(props: {
   onSelectFile: () => void;
   filesMenuMode: FilesMenuMode;
   setFilesMenuMode: React.Dispatch<React.SetStateAction<FilesMenuMode>>;
-  shouldFocusOnSearch: boolean;
-  hideNavigationToAllWorkspaces?: boolean;
-  isNoHeightMaxLimit?: boolean;
+  replaceNavigationToAllWorkspaces?: JSX.Element;
 }) {
   const history = useHistory();
   const routes = useRoutes();
   const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const [filteredGitSyncStatus, setFilteredGitSyncStatus] = useState<WorkspaceGitLocalChangesStatus>();
 
+  const [search, setSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [isScroll, setScroll] = useState(true);
 
   const deletedWorkspaceFiles = useMemo(() => {
     if (!props.currentWorkspaceGitStatusPromise) {
@@ -664,10 +679,22 @@ export function FilesMenuItems(props: {
     return [...props.workspace.files, ...deletedWorkspaceFiles];
   }, [deletedWorkspaceFiles, props.workspace.files]);
 
-  const sortedAndFilteredFiles = useMemo(
+  const sortedFiles = useMemo(() => allFiles.sort((a, b) => a.relativePath.localeCompare(b.relativePath)), [allFiles]);
+
+  const models = useMemo(
+    () => sortedFiles.filter((file) => editorEnvelopeLocator.hasMappingFor(file.relativePath)),
+    [editorEnvelopeLocator, sortedFiles]
+  );
+
+  const otherFiles = useMemo(
+    () => sortedFiles.filter((file) => !editorEnvelopeLocator.hasMappingFor(file.relativePath)),
+    [editorEnvelopeLocator, sortedFiles]
+  );
+
+  const filteredModels = useMemo(
     () =>
-      allFiles
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      models
+        .filter((file) => file.name.toLowerCase().includes(search.toLowerCase()))
         .filter(
           (file) =>
             !filteredGitSyncStatus ||
@@ -676,21 +703,12 @@ export function FilesMenuItems(props: {
               file,
             }) === filteredGitSyncStatus
         ),
-    [allFiles, props.currentWorkspaceGitStatusPromise, filteredGitSyncStatus]
+    [filteredGitSyncStatus, models, props.currentWorkspaceGitStatusPromise?.data, search]
   );
-
-  const models = useMemo(
-    () => sortedAndFilteredFiles.filter((file) => editorEnvelopeLocator.hasMappingFor(file.relativePath)),
-    [editorEnvelopeLocator, sortedAndFilteredFiles]
+  const filteredOtherFiles = useMemo(
+    () => otherFiles.filter((file) => file.name.toLowerCase().includes(search.toLowerCase())),
+    [otherFiles, search]
   );
-
-  const otherFiles = useMemo(
-    () => sortedAndFilteredFiles.filter((file) => !editorEnvelopeLocator.hasMappingFor(file.relativePath)),
-    [editorEnvelopeLocator, sortedAndFilteredFiles]
-  );
-
-  const [search, setSearch] = useState("");
-  const [otherFilesSearch, setOtherFilesSearch] = useState("");
 
   const isCurrentWorkspaceFile = useCallback(
     (file: WorkspaceFile) => {
@@ -774,49 +792,120 @@ export function FilesMenuItems(props: {
 
   useEffect(() => {
     const task = setTimeout(() => {
-      if (props.shouldFocusOnSearch) {
-        searchInputRef.current?.focus();
+      if (props.filesMenuMode === FilesMenuMode.CAROUSEL && isScroll) {
+        scrollRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
-      if (props.filesMenuMode === FilesMenuMode.CAROUSEL) {
-        scrollRef.current?.scrollIntoView();
-      }
+      searchInputRef.current?.focus({ preventScroll: true });
     }, 500);
     return () => {
       clearTimeout(task);
     };
-  }, [props.shouldFocusOnSearch, props.filesMenuMode]);
+  }, [props.filesMenuMode, isScroll]);
+
+  const searchInput = useMemo(() => {
+    return (
+      <MenuInput onKeyDown={(e) => e.stopPropagation()}>
+        <SearchInput
+          ref={searchInputRef}
+          value={search}
+          type={"search"}
+          onChange={(_ev, value) => {
+            setSearch(value);
+          }}
+          placeholder={`In '${props.workspace.descriptor.name}'`}
+          style={{ fontSize: "small", lineHeight: "" }}
+          onClick={(ev) => {
+            ev.stopPropagation();
+          }}
+        />
+      </MenuInput>
+    );
+  }, [props.workspace.descriptor.name, search]);
 
   return (
     <>
-      <Flex direction={{ default: "column" }} spacer={{ default: "spacerNone" }}>
-        {!props.hideNavigationToAllWorkspaces && (
-          <MenuItem direction="up" itemId={props.workspace.descriptor.workspaceId}>
-            All
+      <Grid hasGutter style={{ alignItems: "center" }}>
+        <GridItem span={5}>
+          {!props.replaceNavigationToAllWorkspaces ? (
+            <MenuItem direction={"up"} itemId={`${props.workspace.descriptor.workspaceId}-breadcrumb`}>
+              All
+            </MenuItem>
+          ) : (
+            props.replaceNavigationToAllWorkspaces
+          )}
+        </GridItem>
+        <GridItem span={2}>
+          <Flex justifyContent={{ default: "justifyContentCenter" }}>
+            <FilesMenuModeIcons filesMenuMode={props.filesMenuMode} setFilesMenuMode={props.setFilesMenuMode} />
+          </Flex>
+        </GridItem>
+        <GridItem span={5}>
+          <MenuItem
+            itemId={`other-${props.workspace.descriptor.workspaceId}`}
+            direction={"down"}
+            isDisabled={filteredOtherFiles.length < 1}
+            onClick={(ev) => {
+              setScroll(false);
+            }}
+            drilldownMenu={
+              <DrilldownMenu id={`dd-other-${props.workspace.descriptor.workspaceId}`} style={{ position: "fixed" }}>
+                <MenuItem
+                  itemId={"back-up"}
+                  direction={"up"}
+                  onClick={(ev) => {
+                    setScroll(true);
+                  }}
+                >
+                  Back To Models
+                </MenuItem>
+                <SearchableFilesMenuGroup
+                  search={search}
+                  filesMenuMode={FilesMenuMode.LIST} // always LIST, even for mode CAROUSEL
+                  allFiles={otherFiles}
+                  filteredFiles={filteredOtherFiles}
+                >
+                  {({ filteredFiles }) => (
+                    <AutoSizer>
+                      {({ height, width }) => (
+                        <VariableSizeList
+                          height={height}
+                          itemCount={filteredFiles.length}
+                          itemSize={(index) => getFileDataListHeight(filteredFiles[index])}
+                          width={width}
+                        >
+                          {({ index, style }) => (
+                            <MenuItem
+                              component={"div"}
+                              onClick={() => {}}
+                              className={"kie-tools--file-switcher-no-padding-menu-item"}
+                              style={style}
+                            >
+                              <FileDataList
+                                file={filteredFiles[index]}
+                                displayMode={FileListItemDisplayMode.readonly}
+                                workspaceGitStatusPromise={props.currentWorkspaceGitStatusPromise}
+                                workspaceDescriptor={props.workspace.descriptor}
+                                onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
+                              />
+                            </MenuItem>
+                          )}
+                        </VariableSizeList>
+                      )}
+                    </AutoSizer>
+                  )}
+                </SearchableFilesMenuGroup>
+              </DrilldownMenu>
+            }
+          >
+            Other files
           </MenuItem>
-        )}
-        <FlexItem align={{ default: "alignLeft" }}>
-          <MenuInput onKeyDown={(e) => e.stopPropagation()}>
-            <SearchInput
-              ref={searchInputRef}
-              value={search}
-              type={"search"}
-              onChange={(_ev, value) => {
-                setSearch(value);
-              }}
-              placeholder={`In '${props.workspace.descriptor.name}'`}
-              // expandableInput={{isExpanded, onToggleExpand, toggleAriaLabel: 'Search files'}}
-              style={{ fontSize: "small", lineHeight: "" }}
-              onClick={(ev) => {
-                ev.stopPropagation();
-              }}
-            />
-          </MenuInput>
-        </FlexItem>
-        <Flex direction={{ default: "row" }} alignItems={{ default: "alignItemsCenter" }}>
-          <Flex align={{ default: "alignRight" }}>
+        </GridItem>
+        <GridItem span={8}>{searchInput}</GridItem>
+        <GridItem span={4}>
+          <MenuInput>
             <Tooltip content={"Filter only modified files"} position={"bottom"}>
               <Checkbox
-                label={<Truncate content={"Only changed"} />}
+                label={"Only changed"}
                 id={"filter-git-status-changed-locally"}
                 aria-label={"Select to display only modified files"}
                 isChecked={filteredGitSyncStatus === WorkspaceGitLocalChangesStatus.pending}
@@ -825,31 +914,21 @@ export function FilesMenuItems(props: {
                 }}
               />
             </Tooltip>
-          </Flex>
-          <FlexItem>
-            <FilesMenuModeIcons filesMenuMode={props.filesMenuMode} setFilesMenuMode={props.setFilesMenuMode} />
-          </FlexItem>
-        </Flex>
-      </Flex>
+          </MenuInput>
+        </GridItem>
+      </Grid>
       <Divider component={"li"} />
 
       {props.filesMenuMode === FilesMenuMode.LIST && (
-        <>
-          <SearchableFilesMenuGroup
-            search={search}
-            setSearch={setSearch}
-            filesMenuMode={props.filesMenuMode}
-            shouldFocusOnSearch={props.shouldFocusOnSearch}
-            allFiles={models}
-            selectedGitSyncStatusFilter={filteredGitSyncStatus}
-            setSelectedGitSyncStatusFilter={
-              // filtering on git status makes sense just when we have the promise,
-              // which is the case only for current workspace
-              props.currentWorkspaceGitStatusPromise !== undefined ? setFilteredGitSyncStatus : undefined
-            }
-            isNoHeightMaxLimit={props.isNoHeightMaxLimit}
-          >
-            {({ filteredFiles }) => (
+        <SearchableFilesMenuGroup
+          search={search}
+          filesMenuMode={props.filesMenuMode}
+          allFiles={models}
+          filteredFiles={filteredModels}
+        >
+          {({ filteredFiles }) => {
+            console.warn(filteredFiles);
+            return (
               <AutoSizer>
                 {({ height, width }) => (
                   <VariableSizeList
@@ -867,13 +946,13 @@ export function FilesMenuItems(props: {
                         className={"kie-tools--file-switcher-no-padding-menu-item"}
                         isFocused={isCurrentWorkspaceFile(filteredFiles[index])}
                         isActive={isCurrentWorkspaceFile(filteredFiles[index])}
+                        style={style}
                       >
                         <FileDataList
                           file={filteredFiles[index]}
                           displayMode={getFileListItemMode(filteredFiles[index])}
                           workspaceGitStatusPromise={props.currentWorkspaceGitStatusPromise}
                           workspaceDescriptor={props.workspace.descriptor}
-                          style={style}
                           isCurrentWorkspaceFile={isCurrentWorkspaceFile(filteredFiles[index])}
                           onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
                         />
@@ -882,25 +961,18 @@ export function FilesMenuItems(props: {
                   </VariableSizeList>
                 )}
               </AutoSizer>
-            )}
-          </SearchableFilesMenuGroup>
-        </>
+            );
+          }}
+        </SearchableFilesMenuGroup>
       )}
 
       {props.filesMenuMode === FilesMenuMode.CAROUSEL && (
         <SearchableFilesMenuGroup
           search={search}
-          setSearch={setSearch}
           filesMenuMode={props.filesMenuMode}
-          shouldFocusOnSearch={props.shouldFocusOnSearch}
           allFiles={models}
-          selectedGitSyncStatusFilter={filteredGitSyncStatus}
-          setSelectedGitSyncStatusFilter={
-            // filtering on git status makes sense just when we have the promise,
-            // which is the case only for current workspace
-            props.currentWorkspaceGitStatusPromise !== undefined ? setFilteredGitSyncStatus : undefined
-          }
-          isNoHeightMaxLimit={props.isNoHeightMaxLimit}
+          filteredFiles={filteredModels}
+          style={{ overflowY: "auto" }}
         >
           {({ filteredFiles }) => (
             <Gallery
@@ -934,62 +1006,6 @@ export function FilesMenuItems(props: {
             </Gallery>
           )}
         </SearchableFilesMenuGroup>
-      )}
-      {otherFiles.length > 0 && (
-        <>
-          <Divider component={"li"} />
-          <MenuItem
-            itemId={`other-${props.workspace.descriptor.workspaceId}`}
-            direction="down"
-            drilldownMenu={
-              <DrilldownMenu id={`dd-other-${props.workspace.descriptor.workspaceId}`}>
-                <SearchableFilesMenuGroup
-                  search={search}
-                  setSearch={setSearch}
-                  filesMenuMode={FilesMenuMode.LIST} // always LIST, even for mode CAROUSEL
-                  shouldFocusOnSearch={false}
-                  allFiles={otherFiles}
-                  isNoHeightMaxLimit={props.isNoHeightMaxLimit}
-                >
-                  {({ filteredFiles }) => (
-                    <AutoSizer>
-                      {({ height, width }) => (
-                        <VariableSizeList
-                          height={height}
-                          itemCount={filteredFiles.length}
-                          itemSize={(index) => getFileDataListHeight(filteredFiles[index])}
-                          width={width}
-                        >
-                          {({ index, style }) => (
-                            <MenuItem
-                              component={"div"}
-                              onClick={() => {}}
-                              style={style}
-                              className={"kie-tools--file-switcher-no-padding-menu-item"}
-                            >
-                              <FileDataList
-                                file={filteredFiles[index]}
-                                displayMode={FileListItemDisplayMode.readonly}
-                                workspaceGitStatusPromise={props.currentWorkspaceGitStatusPromise}
-                                workspaceDescriptor={props.workspace.descriptor}
-                                onDeletedWorkspaceFile={props.onDeletedWorkspaceFile}
-                              />
-                            </MenuItem>
-                          )}
-                        </VariableSizeList>
-                      )}
-                    </AutoSizer>
-                  )}
-                </SearchableFilesMenuGroup>
-                <MenuItem itemId={"back-up"} direction="up">
-                  Back To Models
-                </MenuItem>
-              </DrilldownMenu>
-            }
-          >
-            View other files
-          </MenuItem>
-        </>
       )}
     </>
   );

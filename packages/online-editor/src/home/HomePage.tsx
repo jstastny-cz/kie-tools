@@ -83,10 +83,11 @@ import { WorkspaceDescriptor } from "@kie-tools-core/workspaces-git-fs/dist/work
 import { FileLink, SingleFileWorkspaceListItem } from "../filesList/FileDataList";
 import { WorkspaceListItem } from "../workspace/components/WorkspaceListItem";
 import { WorkspaceLoadingCard } from "../workspace/components/WorkspaceLoadingCard";
-import { Tooltip } from "@patternfly/react-core/dist/js/components/Tooltip";
+import { Tooltip, TooltipPosition } from "@patternfly/react-core/dist/js/components/Tooltip";
 import { ResponsiveDropdown } from "../ResponsiveDropdown/ResponsiveDropdown";
 import { ResponsiveDropdownToggle } from "../ResponsiveDropdown/ResponsiveDropdownToggle";
 import { FilesMenu, MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX } from "../editor/FileSwitcher";
+import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
 
 export function HomePage() {
   const routes = useRoutes();
@@ -545,7 +546,24 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
               workspaceGitStatusPromise={workspaceGitStatusPromise}
               onDeletedWorkspaceFile={() => {}}
               isMenuOpen={true}
-              isNoHeightMaxLimit
+              replaceNavigationToAllWorkspaces={
+                isGitBasedWorkspaceKind(workspace.descriptor.origin.kind) ? (
+                  <Tooltip distance={5} position={"top-start"} content={workspace.descriptor.origin.url}>
+                    <TextContent>
+                      <Text
+                        component={TextVariants.small}
+                        style={{
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        <i>{workspace.descriptor.origin.url}</i>
+                      </Text>
+                    </TextContent>
+                  </Tooltip>
+                ) : undefined
+              }
             />
           </DrawerPanelBody>
         </>
