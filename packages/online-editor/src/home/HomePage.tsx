@@ -43,7 +43,10 @@ import { CubesIcon } from "@patternfly/react-icons/dist/js/icons/cubes-icon";
 import { useWorkspaces } from "@kie-tools-core/workspaces-git-fs/dist/context/WorkspacesContext";
 import { OnlineEditorPage } from "../pageTemplate/OnlineEditorPage";
 import { useWorkspaceDescriptorsPromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspacesHooks";
-import { useWorkspacePromise } from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
+import {
+  useWorkspaceGitStatusPromise,
+  useWorkspacePromise,
+} from "@kie-tools-core/workspaces-git-fs/dist/hooks/WorkspaceHooks";
 import { ExclamationTriangleIcon } from "@patternfly/react-icons/dist/js/icons/exclamation-triangle-icon";
 import { FileLabel } from "../filesList/FileLabel";
 import { PromiseStateWrapper } from "@kie-tools-core/react-hooks/dist/PromiseState";
@@ -67,7 +70,10 @@ import { QueryParams } from "../navigation/Routes";
 import { Bullseye } from "@patternfly/react-core/dist/js/layouts/Bullseye";
 import { UploadCard } from "./UploadCard";
 import { ImportFromUrlCard } from "../importFromUrl/ImportFromUrlHomePageCard";
-import { WorkspaceKind } from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceOrigin";
+import {
+  isGitBasedWorkspaceKind,
+  WorkspaceKind,
+} from "@kie-tools-core/workspaces-git-fs/dist/worker/api/WorkspaceOrigin";
 import { PlusIcon } from "@patternfly/react-icons/dist/js/icons/plus-icon";
 import { NewFileDropdownMenu } from "../editor/Toolbar/NewFileDropdownMenu";
 import { Spinner } from "@patternfly/react-core/dist/js/components/Spinner";
@@ -82,6 +88,9 @@ import { WorkspaceLoadingCard } from "../workspace/components/WorkspaceLoadingCa
 import { Tooltip } from "@patternfly/react-core/dist/js/components/Tooltip";
 import { ResponsiveDropdown } from "../ResponsiveDropdown/ResponsiveDropdown";
 import { ResponsiveDropdownToggle } from "../ResponsiveDropdown/ResponsiveDropdownToggle";
+import { FilesMenu, MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX } from "../editor/Toolbar/FileSwitcher";
+import { ClipboardCopy } from "@patternfly/react-core/dist/js/components/ClipboardCopy";
+import { Truncate } from "@patternfly/react-core/dist/js/components/Truncate";
 
 export function HomePage() {
   const routes = useRoutes();
@@ -197,7 +206,11 @@ export function HomePage() {
                 </DrawerSection>
                 <DrawerContent
                   panelContent={
-                    <DrawerPanelContent isResizable={true} minSize={"40%"} maxSize={"80%"}>
+                    <DrawerPanelContent
+                      isResizable={true}
+                      minSize={`max(40%, ${MIN_FILE_SWITCHER_PANEL_WIDTH_IN_PX + 30}px)`}
+                      maxSize={"80%"}
+                    >
                       <WorkspacesListDrawerPanelContent
                         key={expandedWorkspaceId}
                         workspaceId={expandedWorkspaceId}
@@ -478,6 +491,7 @@ export function NewModelCard(props: { title: string; extension: SupportedFileExt
 export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | undefined; onClose: () => void }) {
   const editorEnvelopeLocator = useEditorEnvelopeLocator();
   const workspacePromise = useWorkspacePromise(props.workspaceId);
+  const workspaceGitStatusPromise = useWorkspaceGitStatusPromise(workspacePromise.data?.descriptor);
 
   const otherFiles = useMemo(
     () =>
@@ -513,11 +527,11 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
       }
       resolved={(workspace) => (
         <>
-          <DrawerHead>
+          <DrawerHead hasNoPadding>
             <Flex>
               <FlexItem>
                 <TextContent>
-                  <Text component={TextVariants.h3}>{`Models in '${workspace.descriptor.name}'`}</Text>
+                  <Text component={TextVariants.h3}>{`Contents of '${workspace.descriptor.name}'`}</Text>
                 </TextContent>
               </FlexItem>
               <FlexItem>
@@ -545,37 +559,29 @@ export function WorkspacesListDrawerPanelContent(props: { workspaceId: string | 
                 </ResponsiveDropdown>
               </FlexItem>
             </Flex>
-            {(workspace.descriptor.origin.kind === WorkspaceKind.GITHUB_GIST ||
-              workspace.descriptor.origin.kind === WorkspaceKind.GIT) && (
-              <TextContent>
-                <Text component={TextVariants.small}>
-                  <i>{workspace.descriptor.origin.url.toString()}</i>
-                </Text>
-              </TextContent>
-            )}
             <DrawerActions>
               <DrawerCloseButton onClick={props.onClose} />
             </DrawerActions>
           </DrawerHead>
-          <DrawerPanelBody>
-            <AutoSizer>
-              {({ height, width }) => (
-                <VariableSizeList
-                  height={height}
-                  itemCount={arrayWithModelsThenOtherFiles.length}
-                  itemSize={(index) => getFileDataListHeight(arrayWithModelsThenOtherFiles[index])}
-                  width={width}
-                >
-                  {({ index, style }) => (
-                    <FileDataList
-                      file={arrayWithModelsThenOtherFiles[index]}
-                      isEditable={index < models.length}
-                      style={style}
-                    />
-                  )}
-                </VariableSizeList>
-              )}
-            </AutoSizer>
+          <DrawerPanelBody style={{ padding: "0" }}>
+            <FilesMenu
+              workspace={workspace}
+              workspaceGitStatusPromise={workspaceGitStatusPromise}
+              onDeletedWorkspaceFile={() => {}}
+              isMenuOpen={true}
+              replaceNavigationToAllWorkspaces={
+                isGitBasedWorkspaceKind(workspace.descriptor.origin.kind) ? (
+                  <ClipboardCopy
+                    isReadOnly
+                    clickTip="URL copied."
+                    variant={"inline-compact"}
+                    style={{ display: "flex", flexWrap: "nowrap" }}
+                  >
+                    <Truncate content={workspace.descriptor.origin.url ?? ""} />
+                  </ClipboardCopy>
+                ) : undefined
+              }
+            />
           </DrawerPanelBody>
         </>
       )}
